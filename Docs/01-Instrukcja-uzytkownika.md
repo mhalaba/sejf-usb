@@ -1,4 +1,4 @@
-# Sejf USB 1.2 — instrukcja użytkownika
+# Sejf USB 1.3 — instrukcja użytkownika
 
 Sejf USB szyfruje pliki w folderze `Sejf.vault`, który może leżeć na pendrivie albo na Macu. Do otwarcia sejfu potrzebne są dwie rzeczy:
 
@@ -10,7 +10,22 @@ Bez którejkolwiek z nich danych nie da się odczytać. Aplikacja działa w 100%
 ## Wymagania
 
 - macOS 14 (Sonoma) lub nowszy, Mac z procesorem Apple albo Intel.
-- YubiKey z obsługą FIDO2 (seria YubiKey 5, Security Key, Bio). Kod PIN FIDO2 klucza nie jest potrzebny, a sloty OTP pozostają nietknięte.
+- Klucz FIDO2 z rozszerzeniem `hmac-secret`. Sloty OTP pozostają nietknięte, a kod PIN FIDO2 jest potrzebny tylko na starszych kluczach i tylko przy rejestracji.
+
+### Zgodne klucze
+
+| Klucz | Działa? | Uwagi |
+|---|---|---|
+| YubiKey 5 / 5C / 5 NFC / 5C NFC / 5Ci / Nano | ✅ przetestowany | widoczny model i numer seryjny |
+| **Security Key NFC / Security Key C NFC** (tańszy) | ✅ wykrywanie i rozpoznawanie przetestowane | brak numeru seryjnego — aplikacja rozpoznaje go po poświadczeniu, bez dotyku |
+| YubiKey Bio | ⚠️ powinien działać | nie testowany; wystarcza dotyk, odcisk palca nie jest używany |
+| YubiKey 5 FIPS | ⚠️ powinien działać | w trybie FIPS wymaga PIN-u przy rejestracji; nie testowany |
+| starsze klucze tylko U2F (np. niebieski „FIDO U2F Security Key”) | ❌ | brak FIDO2 `hmac-secret` — aplikacja to wykryje i powie |
+| inne klucze FIDO2 z `hmac-secret` (np. Nitrokey 3, SoloKey 2, Feitian) | ⚠️ | nie testowane |
+
+**NFC a Mac:** Maki nie mają czytnika NFC, więc także klucz „NFC” wkładasz do portu USB (A lub C, zależnie od modelu). NFC przydaje się przy telefonie, a Sejf USB jest aplikacją na Maca.
+
+**PIN FIDO2:** jeśli klucz go wymaga (starsze klucze z ustawionym PIN-em), aplikacja poprosi o niego przy tworzeniu sejfu albo dodawaniu klucza. PIN zostaje w kluczu i nie jest nigdzie zapisywany. Po 8 błędnych próbach funkcje FIDO2 klucza zostają zablokowane.
 
 ## 1. Gdzie co trzymać
 

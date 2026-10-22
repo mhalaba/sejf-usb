@@ -31,6 +31,7 @@ struct ContentView: View {
             .animation(.easeInOut(duration: 0.25), value: model.screen)
 
             if let busy = model.busy { BusyOverlay(state: busy) }
+            if let failure = model.selfTestFailure { SelfTestFailureView(message: failure) }
             if let notice = model.notice { NoticeToast(text: notice) { model.notice = nil } }
         }
         .alert("Błąd", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
@@ -41,6 +42,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: Binding(get: { model.showNewVault }, set: { model.showNewVault = $0 })) {
             NewVaultSheet().environmentObject(model)
+        }
+        .sheet(item: Binding(get: { model.pinPrompt }, set: { model.pinPrompt = $0 })) { prompt in
+            PinSheet(prompt: prompt).environmentObject(model)
         }
     }
 }
@@ -323,14 +327,20 @@ struct YubiKeyStatusCard: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(color.opacity(0.25)))
     }
 
-    var ready: Bool { !model.keys.isEmpty }
+    var ready: Bool { model.keys.first?.supportsHMACSecret == true }
     var color: Color { ready ? Theme.good : Theme.warn }
     var title: String {
         guard let k = model.keys.first else { return "Włóż YubiKey do portu USB" }
+        if !k.supportsHMACSecret { return "\(k.name) — nieobsługiwany" }
         return "\(k.name) gotowy" + (k.serial.map { " · nr \($0)" } ?? "")
     }
     var detail: String {
-        guard model.keys.first != nil else { return "Klucz jest wymagany do utworzenia i otwarcia sejfu." }
+        guard let k = model.keys.first else {
+            return "Klucz FIDO2: YubiKey 5, Security Key NFC / C NFC lub inny z obsługą hmac-secret. Na Macu wkładasz go do USB."
+        }
+        if !k.supportsHMACSecret {
+            return "Ten klucz nie obsługuje FIDO2 hmac-secret (np. starszy klucz tylko U2F). Użyj YubiKey 5 albo Security Key z FIDO2."
+        }
         return "Nie dotykaj klucza teraz. Kliknij przycisk poniżej — gdy pojawi się „Dotknij przycisku na YubiKey…”, wtedy dotknij."
     }
 }
@@ -426,7 +436,7 @@ struct TouchStepView: View {
     @Local private var attempted = false
     @Local private var pulse = false
 
-    var ready: Bool { !model.keys.isEmpty }
+    var ready: Bool { model.keys.first?.supportsHMACSecret == true }
 
     var body: some View {
         Card {
@@ -459,7 +469,7 @@ struct TouchStepView: View {
     }
 
     var headline: String {
-        if !ready { return "Włóż YubiKey" }
+        if !ready { return model.keys.isEmpty ? "Włóż YubiKey" : "Ten klucz nie obsługuje FIDO2" }
         if model.busy?.touch == true { return "Teraz dotknij złotego przycisku" }
         if model.busy != nil { return model.busy?.message ?? "" }
         return attempted ? "Nie udało się — spróbuj ponownie" : "\(title)…"
@@ -688,6 +698,71 @@ struct RecoveryCodeSheet: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warn).font(.system(size: 12))
             Text(s).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+// MARK: - PIN FIDO2
+
+struct PinSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let prompt: PinPrompt
+    @Local private var pin = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "number.square.fill").font(.system(size: 26)).foregroundStyle(Theme.gradient)
+                Text("Kod PIN FIDO2 klucza").font(.system(size: 20, weight: .bold, design: .rounded))
+            }
+            Text("Ten klucz wymaga swojego kodu PIN FIDO2 przy rejestracji (ustawionego np. w Yubico Authenticator). To nie jest hasło sejfu — PIN zostaje tylko w kluczu i nie jest nigdzie zapisywany.")
+                .font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
+            if let message = prompt.message {
+                Label(message, systemImage: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(Theme.bad)
+            }
+            SecureField("PIN FIDO2 (min. 4 znaki)", text: $pin).field().focused($focused)
+                .guardsYubiKeyTyping($pin, model)
+                .onSubmit(submit)
+            Label("Po 8 błędnych próbach funkcje FIDO2 klucza zostaną zablokowane do czasu resetu.", systemImage: "info.circle")
+                .font(.system(size: 11)).foregroundStyle(Theme.muted)
+            HStack {
+                Spacer()
+                Button("Anuluj") { dismiss() }.buttonStyle(GhostButtonStyle())
+                Button(action: submit) { Label("Dalej", systemImage: "arrow.right") }
+                    .buttonStyle(PrimaryButtonStyle()).disabled(pin.count < 4).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(28)
+        .frame(width: 480)
+        .background(Theme.bgBottom)
+        .onAppear { focused = true }
+    }
+
+    func submit() {
+        guard pin.count >= 4, !model.justStrayTouched else { return }
+        let value = pin
+        pin = ""
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { prompt.retry(value) }
+    }
+}
+
+// MARK: - Nieudane samotesty
+
+struct SelfTestFailureView: View {
+    let message: String
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.85).ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "xmark.shield.fill").font(.system(size: 54)).foregroundStyle(Theme.bad)
+                Text("Samotest kryptograficzny nie powiódł się").font(.system(size: 22, weight: .bold, design: .rounded))
+                Text(message).font(.system(size: 13)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                    .frame(maxWidth: 460)
+                Button("Zamknij aplikację") { NSApp.terminate(nil) }.buttonStyle(PrimaryButtonStyle())
+            }
         }
     }
 }

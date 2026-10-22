@@ -14,6 +14,9 @@ final class SoftFIDO: FIDOAuthenticator {
         guard let id = credentialIDs.first(where: { creds[$0] != nil }) else { throw CTAPError(code: 0x2E) }
         return (id, Data(HMAC<SHA256>.authenticationCode(for: salt, using: SymmetricKey(data: creds[id]!))))
     }
+    func probe(rpID: String, credentialIDs: [Data]) throws -> Data? {
+        credentialIDs.first { creds[$0] != nil }
+    }
 }
 
 var failures = 0
@@ -269,6 +272,30 @@ do {
     try old.unlock(password: "hasło Anny 123456", fido: anna)
     check(old.isUnlocked && old.header.name == nil && old.users == ["Bez nazwy"], "stary format nagłówka (1.1) działa")
     check(Vault.cleanName("   ") == nil && Vault.cleanName(String(repeating: "x", count: 99))?.count == 60, "puste i za długie nazwy obsłużone")
+}
+
+print("Klucze bez numeru seryjnego (np. Security Key NFC)")
+do {
+    let nv = work.appendingPathComponent("noserial")
+    try fm.createDirectory(at: nv, withIntermediateDirectories: true)
+    let sk1 = SoftFIDO(), sk2 = SoftFIDO()
+    let (v, _) = try Vault.create(on: nv, password: "hasło klucza tańszego", fido: sk1, serial: nil, label: "Security Key NFC",
+                                  owner: "Ola", chunkSize: chunk, iterations: iters)
+    check(try v.connectedSlot(fido: sk1)?.owner == "Ola", "ciche rozpoznanie klucza bez numeru seryjnego")
+    check(try v.connectedSlot(fido: sk2) == nil, "obcy klucz nie jest rozpoznany")
+    check(throwsError { try v.addFIDOKey(password: "drugi raz ten sam 1", fido: sk1, serial: nil, label: "x", owner: "Ola") },
+          "ten sam klucz (bez numeru) nie zostanie dodany drugi raz")
+    try v.addFIDOKey(password: "hasło drugiego klucza", fido: sk2, serial: nil, label: "Security Key NFC", owner: "Ola")
+    try Vault.open(on: nv).unlock(password: "hasło drugiego klucza", fido: sk2)
+    check(v.fidoSlots.count == 2, "dwa klucze bez numerów seryjnych w jednym sejfie")
+}
+
+print("Samotesty kryptograficzne (styl FIPS 140-3)")
+do {
+    let passed = try SelfTest.run()
+    check(passed.count == 10, "samotesty: \(passed.joined(separator: ", "))")
+} catch {
+    check(false, "samotesty: \(error.localizedDescription)")
 }
 
 print("Wybór plików i bezpieczne usuwanie (punkt 2)")

@@ -60,19 +60,21 @@ final class TouchingFIDO: FIDOAuthenticator, @unchecked Sendable {
     private let reporter: Reporter
     private let after: String
     private let total: Int
+    private let pin: String?
     private var step = 0
 
-    init(reporter: Reporter, after: String, touches total: Int = 1) {
+    init(reporter: Reporter, after: String, touches total: Int = 1, pin: String? = nil) {
         self.reporter = reporter
         self.after = after
         self.total = total
+        self.pin = pin
     }
 
     private func run<T>(_ body: (YubiKeyFIDO) throws -> T) throws -> T {
         step += 1
         let label = total > 1 ? " (\(step)/\(total))" : ""
         reporter.update("Łączenie z YubiKey…", touch: false)
-        let key = YubiKeyFIDO { [reporter] in reporter.update("Teraz dotknij złotego przycisku\(label)", touch: true) }
+        let key = YubiKeyFIDO(pin: pin) { [reporter] in reporter.update("Teraz dotknij złotego przycisku\(label)", touch: true) }
         defer { reporter.update(after, touch: false) }
         return try body(key)
     }
@@ -84,6 +86,17 @@ final class TouchingFIDO: FIDOAuthenticator, @unchecked Sendable {
     func hmacSecret(rpID: String, credentialIDs: [Data], salt: Data) throws -> (credentialID: Data, output: Data) {
         try run { try $0.hmacSecret(rpID: rpID, credentialIDs: credentialIDs, salt: salt) }
     }
+
+    func probe(rpID: String, credentialIDs: [Data]) throws -> Data? {
+        try YubiKeyFIDO().probe(rpID: rpID, credentialIDs: credentialIDs)   // bez dotyku — bez komunikatu
+    }
+}
+
+/// Prośba o kod PIN FIDO2 (tylko przy rejestracji klucza, który go wymaga).
+struct PinPrompt: Identifiable {
+    let id = UUID()
+    let message: String?
+    let retry: (String) -> Void
 }
 
 @MainActor
@@ -105,6 +118,14 @@ final class AppModel: ObservableObject {
     /// Klucz, dla którego otwarty jest arkusz „Zmień hasło”.
     @Published var changePasswordSlot: Keyslot?
     @Published var library: [KnownVault] = []
+    @Published var pinPrompt: PinPrompt?
+    /// Wynik cichego sprawdzenia podłączonego klucza (gdy otwarty jest panel kluczy / hasła / użytkownika).
+    @Published var connectedSlotID: String?
+    @Published var connectedKeyChecked = false
+    /// Samotesty kryptograficzne przy starcie — gdy zawiodą, aplikacja nie przetwarza danych.
+    @Published var selfTestFailure: String?
+    @Published var selfTestsPassed: [String] = []
+    private var probedKeys: [YubiKeyDevice] = []
     @Published var showNewVault = false
     @Published var showAddUser = false
     /// Nowa osoba dołącza do istniejącego sejfu — po odblokowaniu otworzy się „Dodaj użytkownika”.
@@ -124,6 +145,11 @@ final class AppModel: ObservableObject {
     private var observers: [NSObjectProtocol] = []
 
     init() {
+        do {
+            selfTestsPassed = try SelfTest.run()
+        } catch {
+            selfTestFailure = error.localizedDescription
+        }
         Self.removeStalePreviews()
         loadLibrary()
         refreshVolumes()
@@ -366,8 +392,9 @@ final class AppModel: ObservableObject {
             while !Task.isCancelled {
                 guard let self else { return }
                 if self.busy == nil, self.screen != .vault || self.wantsKeyPolling {
-                    let found = await Task.detached { YubiKeyCCID.scan() }.value
+                    let found = await Task.detached { KeyScanner.scan() }.value
                     if found != self.keys { self.keys = found }
+                    await self.checkConnectedKey()
                 }
                 try? await Task.sleep(for: .seconds(3))
             }
@@ -375,7 +402,31 @@ final class AppModel: ObservableObject {
     }
 
     /// Ustawiane, gdy otwarty jest arkusz zarządzania kluczami.
-    var wantsKeyPolling = false
+    var wantsKeyPolling = false {
+        didSet { if wantsKeyPolling { probedKeys = []; connectedKeyChecked = false; Task { await checkConnectedKey() } } }
+    }
+
+    /// Bez dotyku sprawdza, który keyslot należy do podłączonego klucza (działa też bez numeru seryjnego).
+    private func checkConnectedKey() async {
+        guard screen == .vault, wantsKeyPolling, busy == nil, let vault else { return }
+        guard keys.count == 1 else {
+            connectedSlotID = nil
+            connectedKeyChecked = false
+            probedKeys = keys
+            return
+        }
+        guard keys != probedKeys else { return }
+        probedKeys = keys
+        let result = await Task.detached { Result { try vault.connectedSlot(fido: YubiKeyFIDO()) } }.value
+        switch result {
+        case .success(let slot):
+            connectedSlotID = slot?.id
+            connectedKeyChecked = true
+        case .failure:
+            probedKeys = []          // klucz chwilowo zajęty — spróbujemy przy następnym odświeżeniu
+            connectedKeyChecked = false
+        }
+    }
 
     // MARK: - Przypadkowe dotknięcie klucza
 
@@ -399,12 +450,13 @@ final class AppModel: ObservableObject {
 
     // MARK: - Sejf
 
-    func createVault(owner: String, password: String, failed: (() -> Void)? = nil) {
+    func createVault(owner: String, password: String, pin: String? = nil, failed: (() -> Void)? = nil) {
         guard let volume, let key = keys.first else { return }
         let label = key.name + (key.serial.map { " · \($0)" } ?? "")
         let name = pendingVaultName ?? volume.name
+        let retry: (String) -> Void = { [weak self] pin in self?.createVault(owner: owner, password: password, pin: pin, failed: failed) }
         run("Tworzenie sejfu…", { reporter -> (Vault, String) in
-            let fido = TouchingFIDO(reporter: reporter, after: "Tworzenie sejfu…", touches: 2)
+            let fido = TouchingFIDO(reporter: reporter, after: "Tworzenie sejfu…", touches: 2, pin: pin)
             return try Vault.create(on: volume.url, password: password, fido: fido, serial: key.serial, label: label,
                                     name: name, owner: owner)
         }, then: { [weak self] (result: (Vault, String)) in
@@ -416,7 +468,7 @@ final class AppModel: ObservableObject {
                                      available: volume.available, format: volume.format, hasVault: true)
             self.recoveryCode = result.1
             self.didUnlock()
-        }, failed: failed)
+        }, failed: failed, pinRetry: retry)
     }
 
     func unlock(password: String, failed: (() -> Void)? = nil) {
@@ -617,19 +669,22 @@ final class AppModel: ObservableObject {
         "aby to wykluczyć: 🔑 → Wymień klucz główny."
 
     /// Nowy użytkownik albo zapasowy klucz istniejącego (ten sam `owner`).
-    func addUser(owner: String, serial: Int?, keyName: String, password: String) {
+    func addUser(owner: String, serial: Int?, keyName: String, password: String, pin: String? = nil) {
         guard let vault else { return }
         touch()
         let label = keyName + (serial.map { " · \($0)" } ?? "")
         let existing = vault.users.contains(owner)
+        let retry: (String) -> Void = { [weak self] pin in
+            self?.addUser(owner: owner, serial: serial, keyName: keyName, password: password, pin: pin)
+        }
         run(existing ? "Dodawanie zapasowego klucza…" : "Dodawanie użytkownika…", { reporter in
             try vault.addFIDOKey(password: password,
-                                 fido: TouchingFIDO(reporter: reporter, after: "Zapisywanie…", touches: 2),
+                                 fido: TouchingFIDO(reporter: reporter, after: "Zapisywanie…", touches: 2, pin: pin),
                                  serial: serial, label: label, owner: owner)
-        }) { [weak self] in
+        }, then: { [weak self] in
             self?.keyslots = vault.header.keyslots
             self?.notice = existing ? "Dodano zapasowy klucz dla: \(owner)." : "Dodano użytkownika „\(owner)”. Od teraz otwiera ten sejf swoim kluczem i hasłem."
-        }
+        }, pinRetry: retry)
     }
 
     /// Otwiera arkusz zmiany hasła — dla wskazanego klucza albo dla podłączonego YubiKeya.
@@ -647,8 +702,8 @@ final class AppModel: ObservableObject {
     func changePassword(slot: Keyslot, currentPassword: String, newPassword: String) {
         guard let vault else { return }
         touch()
-        if let s = slot.serial, !keys.compactMap(\.serial).contains(s) {
-            errorMessage = "Włóż YubiKey nr \(s), aby zmienić jego hasło."
+        if connectedKeyChecked, connectedSlotID != slot.id {
+            errorMessage = "Podłączony klucz nie należy do „\(slot.displayName)”. Włóż właściwy klucz."
             return
         }
         run("Zmiana hasła…", { reporter in
@@ -680,6 +735,7 @@ final class AppModel: ObservableObject {
 
     /// Klucz FIDO2 sejfu odpowiadający podłączonemu YubiKeyowi.
     var connectedFIDOSlot: Keyslot? {
+        if connectedKeyChecked { return keyslots.first { $0.id == connectedSlotID } }
         let fido = keyslots.filter { $0.kind == .fido2 }
         let serials = Set(keys.compactMap(\.serial))
         if let current = vault?.unlockedSlot, current.kind == .fido2, current.serial.map(serials.contains) ?? false {
@@ -763,8 +819,10 @@ final class AppModel: ObservableObject {
     // MARK: - Wykonywanie w tle
 
     private func run<T>(_ message: String, _ work: @escaping @Sendable (Reporter) throws -> T,
-                        then: @escaping (T) -> Void, failed: (() -> Void)? = nil) {
+                        then: @escaping (T) -> Void, failed: (() -> Void)? = nil,
+                        pinRetry: ((String) -> Void)? = nil) {
         guard busy == nil else { return }
+        guard selfTestFailure == nil else { errorMessage = selfTestFailure; return }
         busy = BusyState(message: message)
         let reporter = Reporter(self)
         Task {
@@ -775,13 +833,17 @@ final class AppModel: ObservableObject {
             } catch {
                 busy = nil
                 failed?()
-                errorMessage = error.localizedDescription
+                if let pinRetry, let ctap = error as? CTAPError, ctap.isPINRequired || ctap.isPINInvalid {
+                    pinPrompt = PinPrompt(message: ctap.isPINInvalid ? ctap.localizedDescription : nil, retry: pinRetry)
+                } else {
+                    errorMessage = error.localizedDescription
+                }
             }
         }
     }
 
     private func run(_ message: String, _ work: @escaping @Sendable (Reporter) throws -> Void,
-                     then: @escaping () -> Void, failed: (() -> Void)? = nil) {
-        run(message, work, then: { (_: Void) in then() }, failed: failed)
+                     then: @escaping () -> Void, failed: (() -> Void)? = nil, pinRetry: ((String) -> Void)? = nil) {
+        run(message, work, then: { (_: Void) in then() }, failed: failed, pinRetry: pinRetry)
     }
 }

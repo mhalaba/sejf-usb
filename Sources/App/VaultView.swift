@@ -160,7 +160,9 @@ struct VaultView: View {
                 .buttonStyle(.plain).foregroundStyle(Theme.warn)
             }
             Spacer()
-            Label("AES-256-GCM · YubiKey", systemImage: "checkmark.shield.fill").foregroundStyle(Theme.good.opacity(0.8))
+            Label("AES-256-GCM · YubiKey · samotesty \(model.selfTestsPassed.count)/10", systemImage: "checkmark.shield.fill")
+                .foregroundStyle(Theme.good.opacity(0.8))
+                .help("Algorytmy zatwierdzone przez NIST, wykonywane przez moduł kryptograficzny systemu (corecrypto). Samotesty przy starcie: " + model.selfTestsPassed.joined(separator: ", "))
         }
         .font(.system(size: 12))
         .foregroundStyle(Theme.muted)
@@ -394,10 +396,7 @@ struct ChangePasswordSheet: View {
     @Local private var confirm = ""
     @FocusState private var focused: Bool
 
-    var keyConnected: Bool {
-        guard let serial = slot.serial else { return !model.keys.isEmpty }
-        return model.keys.contains { $0.serial == serial }
-    }
+    var keyConnected: Bool { model.connectedKeyChecked && model.connectedSlotID == slot.id }
 
     var problem: String? {
         if !new.isEmpty && new.count < Vault.minPasswordLength { return "Nowe hasło musi mieć co najmniej \(Vault.minPasswordLength) znaków." }
@@ -434,8 +433,11 @@ struct ChangePasswordSheet: View {
             if keyConnected {
                 Label("Po kliknięciu „Zmień hasło” dotknij YubiKey, gdy aplikacja o to poprosi (jeden raz).", systemImage: "hand.tap.fill")
                     .font(.system(size: 12)).foregroundStyle(Theme.muted)
+            } else if model.keys.count == 1 && !model.connectedKeyChecked {
+                Label("Sprawdzanie klucza…", systemImage: "hourglass").font(.system(size: 12)).foregroundStyle(Theme.muted)
             } else {
-                Label("Włóż YubiKey" + (slot.serial.map { " nr \($0)" } ?? "") + ", aby zmienić jego hasło.", systemImage: "key")
+                Label("Włóż klucz „\(slot.label)”" + (model.keys.count > 1 ? " (tylko jeden naraz)" : "") + ", aby zmienić jego hasło.",
+                      systemImage: "key")
                     .font(.system(size: 12)).foregroundStyle(Theme.warn)
             }
             Label("Zmiana dotyczy tego sejfu. Stare kopie sejfu (np. z kopii zapasowej) nadal otwiera stare hasło — aby to wykluczyć, użyj potem 🔑 → Wymień klucz główny.",
@@ -483,9 +485,9 @@ struct AddUserSheet: View {
     var owner: String { newPerson ? (Vault.cleanName(name) ?? "") : existing }
 
     var newKey: YubiKeyDevice? {
-        let registered = Set(model.keyslots.compactMap(\.serial))
-        guard model.keys.count == 1, let key = model.keys.first else { return nil }
-        return key.serial.map { registered.contains($0) } == true ? nil : key
+        guard model.keys.count == 1, let key = model.keys.first, key.supportsHMACSecret,
+              model.connectedKeyChecked, model.connectedSlotID == nil else { return nil }
+        return key
     }
 
     var nameTaken: Bool { newPerson && model.vault?.users.contains(owner) == true }
@@ -563,6 +565,11 @@ struct AddUserSheet: View {
         } else if model.keys.isEmpty {
             Label("Włóż YubiKey, który chcesz dodać.", systemImage: "key")
                 .font(.system(size: 12)).foregroundStyle(Theme.warn)
+        } else if model.keys.first?.supportsHMACSecret == false {
+            Label("Ten klucz nie obsługuje FIDO2 hmac-secret — użyj YubiKey 5 albo Security Key z FIDO2.", systemImage: "xmark.octagon")
+                .font(.system(size: 12)).foregroundStyle(Theme.bad)
+        } else if !model.connectedKeyChecked {
+            Label("Sprawdzanie klucza…", systemImage: "hourglass").font(.system(size: 12)).foregroundStyle(Theme.muted)
         } else {
             Label("Ten klucz jest już w sejfie. Wyjmij go i włóż klucz nowej osoby.", systemImage: "arrow.triangle.swap")
                 .font(.system(size: 12)).foregroundStyle(Theme.warn)

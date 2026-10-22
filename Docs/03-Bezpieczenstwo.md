@@ -54,6 +54,10 @@ W 1.1 dodano też **zmianę hasła z weryfikacją obecnego hasła** (jedno dotkn
 - **Dołączanie odbywa się tylko lokalnie:** sejf odblokowuje osoba z dostępem, nowa osoba wpisuje hasło i dotyka swojego klucza na tym samym Macu. Nie ma zaproszeń przez sieć ani plików z kluczem do przesłania, więc nie ma czego przechwycić.
 - Imiona użytkowników i nazwy sejfów są zapisane **jawnie** w nagłówku, czyli widoczne bez odblokowania. Nie są uwierzytelnione: osoba z dostępem zapisu do plików mogłaby je zmienić, ale nie daje jej to dostępu do danych.
 
+## FIPS 140
+
+Sejf używa wyłącznie algorytmów zatwierdzonych przez NIST, wykonywanych przez systemowy moduł Apple (corecrypto) z walidacją FIPS 140-3, i wykonuje samotesty przy starcie. **Nie ma certyfikatu FIPS**, a poziom 4 jest dla programów nieosiągalny. Szczegóły: [06-FIPS.md](06-FIPS.md).
+
 ## Ograniczenia, o których trzeba wiedzieć
 
 - **Nośniki flash, SSD, APFS:** nadpisanie pliku nie gwarantuje zniszczenia starych bloków. Lokalne migawki Time Machine trzymają stan dysku do ~24 h. Najlepiej, by jawne sekrety w ogóle nie trafiały na dysk.

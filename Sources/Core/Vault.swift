@@ -235,6 +235,10 @@ public final class Vault: @unchecked Sendable {
         if let serial, fidoSlots.contains(where: { $0.serial == serial }) {
             throw SejfError.invalidInput("Ten YubiKey jest już w sejfie — użyj „Zmień hasło”.")
         }
+        // Klucze bez numeru seryjnego (np. Security Key) rozpoznajemy po poświadczeniu — bez dotyku.
+        if let existing = try connectedSlot(fido: fido) {
+            throw SejfError.invalidInput("Ten klucz jest już w sejfie (\(existing.owner ?? existing.label)).")
+        }
         let credential = try fido.makeCredential(rpID: Self.fidoRP)
         let salt = try fidoSlots.first?.challenge ?? Rand.bytes(32)   // wspólna sól → odblokowanie jednym dotknięciem
         header.keyslots.append(try makeFIDOSlot(master: master, password: password, fido: fido, credentialID: credential,
@@ -244,6 +248,15 @@ public final class Vault: @unchecked Sendable {
     }
 
     /// Zmiana hasła klucza FIDO2. Wymaga obecnego hasła i jednego dotknięcia klucza.
+    /// Keyslot należący do podłączonego klucza (ciche sprawdzenie, bez dotyku) albo nil.
+    public func connectedSlot(fido: FIDOAuthenticator) throws -> Keyslot? {
+        let slots = fidoSlots.filter { $0.credentialID != nil }
+        guard !slots.isEmpty, let id = try fido.probe(rpID: Self.fidoRP, credentialIDs: slots.compactMap(\.credentialID)) else {
+            return nil
+        }
+        return slots.first { $0.credentialID == id }
+    }
+
     public func changePassword(slotID: String, currentPassword: String, newPassword: String,
                                fido: FIDOAuthenticator) throws {
         let master = try requireMaster()

@@ -41,7 +41,8 @@ swift Tools/make_icon.swift /tmp && iconutil -c icns /tmp/AppIcon.iconset -o Res
 | `Sources/Core/Vault.swift` | format sejfu, keysloty, szyfrowanie plików, wymiana klucza głównego, wybór plików |
 | `Sources/Core/FIDO2.swift` | CTAPHID przez IOKit HID, CTAP2 makeCredential / getAssertion z `hmac-secret` |
 | `Sources/Core/CBOR.swift` | minimalny, kanoniczny koder/dekoder CBOR z limitami |
-| `Sources/Core/YubiKeyCCID.swift` | wykrywanie klucza (model, numer seryjny) przez CryptoTokenKit |
+| `Sources/Core/YubiKeyCCID.swift` | wykrywanie kluczy przez FIDO2 (każdy klucz FIDO2) + model i numer seryjny przez CCID, gdy dostępne |
+| `Sources/Core/SelfTest.swift` | samotesty kryptograficzne przy starcie (styl FIPS 140-3) |
 | `Sources/Core/Support.swift` | błędy, losowość, PBKDF2/HKDF, hasło odzyskiwania, bezpieczne usuwanie, wykrywanie iCloud |
 | `Sources/App/*.swift` | interfejs SwiftUI (model aplikacji, widoki, motyw) |
 | `Tests/main.swift` | testy z programowym odpowiednikiem klucza FIDO2 |
@@ -55,7 +56,9 @@ swift Tools/make_icon.swift /tmp && iconutil -c icns /tmp/AppIcon.iconset -o Res
 - wymiana klucza głównego: komplet plików, unieważnienie starych kluczy, haseł i kopii nagłówka, przerwanie w dwóch momentach;
 - bezpieczne usuwanie: pliki ukryte, dowiązania symboliczne i twarde, puste foldery;
 - wykrywanie folderów iCloud;
-- odporność dekodera CBOR na spreparowane dane.
+- odporność dekodera CBOR na spreparowane dane;
+- klucze bez numeru seryjnego (Security Key): ciche rozpoznanie, blokada ponownego dodania;
+- samotesty kryptograficzne (10 testów znanych odpowiedzi i spójności).
 
 ## Uwagi
 

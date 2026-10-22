@@ -1,5 +1,14 @@
 # Historia zmian
 
+## 1.3
+
+- **Tańsze klucze:** obsługa **Security Key NFC / C NFC** i innych kluczy FIDO2 z `hmac-secret`. Wykrywanie idzie przez FIDO2 zamiast CCID, a model i numer seryjny są dopisywane, gdy klucz je udostępnia.
+- **Ciche rozpoznawanie klucza** (bez dotyku i bez numeru seryjnego): blokuje ponowne dodanie tego samego klucza i wskazuje właściwy klucz przy zmianie hasła oraz wymianie klucza głównego.
+- **PIN FIDO2** przy rejestracji na kluczach, które go wymagają (CTAP 2.0 z ustawionym PIN-em), z informacją o pozostałych próbach.
+- Czytelny komunikat dla kluczy bez `hmac-secret` (stare U2F) i z włączonym „Always UV”.
+- **Samotesty kryptograficzne przy starcie** (styl FIPS 140-3): 10 testów; przy błędzie aplikacja nie przetwarza danych.
+- Dokument [06-FIPS.md](06-FIPS.md): mapowanie algorytmów na normy NIST i uczciwy opis braku certyfikacji.
+
 ## 1.2
 
 - **Nowa instalacja:** ekran powitalny z trzema drogami: utwórz nowy sejf, otwórz mój sejf, dołącz do sejfu.
