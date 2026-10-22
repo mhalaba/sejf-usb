@@ -73,8 +73,8 @@ final class TouchingFIDO: FIDOAuthenticator, @unchecked Sendable {
     private func run<T>(_ body: (YubiKeyFIDO) throws -> T) throws -> T {
         step += 1
         let label = total > 1 ? " (\(step)/\(total))" : ""
-        reporter.update("Łączenie z YubiKey…", touch: false)
-        let key = YubiKeyFIDO(pin: pin) { [reporter] in reporter.update("Teraz dotknij złotego przycisku\(label)", touch: true) }
+        reporter.update(L("Łączenie z YubiKey…"), touch: false)
+        let key = YubiKeyFIDO(pin: pin) { [reporter] in reporter.update(L("Teraz dotknij złotego przycisku%@", label), touch: true) }
         defer { reporter.update(after, touch: false) }
         return try body(key)
     }
@@ -118,6 +118,13 @@ final class AppModel: ObservableObject {
     /// Klucz, dla którego otwarty jest arkusz „Zmień hasło”.
     @Published var changePasswordSlot: Keyslot?
     @Published var library: [KnownVault] = []
+    /// "system", "pl" albo "en" — zmiana odświeża cały interfejs.
+    @Published var language: String = Lang.override ?? "system"
+
+    func setLanguage(_ code: String) {
+        Lang.set(code == "system" ? nil : code)
+        language = code
+    }
     @Published var pinPrompt: PinPrompt?
     /// Wynik cichego sprawdzenia podłączonego klucza (gdy otwarty jest panel kluczy / hasła / użytkownika).
     @Published var connectedSlotID: String?
@@ -169,13 +176,7 @@ final class AppModel: ObservableObject {
     private func warnIfRunningFromRemovableMedia() {
         let values = try? Bundle.main.bundleURL.resourceValues(forKeys: [.volumeIsRemovableKey, .volumeIsEjectableKey])
         guard values?.volumeIsRemovable == true || values?.volumeIsEjectable == true else { return }
-        errorMessage = """
-        Uruchamiasz aplikację z nośnika wymiennego. Ktoś, kto miał dostęp do pendrive'a, mógł ją podmienić \
-        i przechwycić hasło oraz odpowiedź YubiKeya.
-
-        Bezpieczniej: zainstaluj aplikację na Macu (np. w ~/Applications) i uruchamiaj ją stamtąd — na pendrivie \
-        wystarczy sam folder Sejf.vault.
-        """
+        errorMessage = L("Uruchamiasz aplikację z nośnika wymiennego. Ktoś, kto miał dostęp do pendrive'a, mógł ją podmienić i przechwycić hasło oraz odpowiedź YubiKeya.\n\nBezpieczniej: zainstaluj aplikację na Macu (np. w ~/Applications) i uruchamiaj ją stamtąd — na pendrivie wystarczy sam folder Sejf.vault.")
     }
 
     // MARK: - Nośniki
@@ -239,7 +240,7 @@ final class AppModel: ObservableObject {
 
     func open(_ known: KnownVault) {
         guard known.isAvailable else {
-            errorMessage = "Sejfu „\(known.name)” nie ma pod ścieżką \(known.path). Podłącz nośnik albo usuń sejf z listy."
+            errorMessage = L("Sejfu „%@” nie ma pod ścieżką %@. Podłącz nośnik albo usuń sejf z listy.", known.name, known.path)
             return
         }
         open(url: known.url)
@@ -254,17 +255,17 @@ final class AppModel: ObservableObject {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.prompt = "Otwórz"
-        panel.message = "Wskaż folder Sejf.vault albo folder, w którym się znajduje (np. na pendrivie)"
+        panel.prompt = L("Otwórz")
+        panel.message = L("Wskaż folder Sejf.vault albo folder, w którym się znajduje (np. na pendrivie)")
         panel.directoryURL = volumes.first(where: \.hasVault)?.url ?? FileManager.default.homeDirectoryForCurrentUser
         guard panel.runModal() == .OK, var url = panel.url else { return }
         if url.lastPathComponent == Vault.folderName { url.deleteLastPathComponent() }
         guard Vault.exists(on: url) else {
-            errorMessage = "W „\(url.lastPathComponent)” nie ma sejfu (folderu Sejf.vault z plikiem header.json)."
+            errorMessage = L("W „%@” nie ma sejfu (folderu Sejf.vault z plikiem header.json).", url.lastPathComponent)
             return
         }
         guard !CloudCheck.isInICloud(url) else {
-            errorMessage = SejfError.inICloud.localizedDescription + " Przenieś cały folder sejfu (np. do ~/Sejf) i spróbuj ponownie."
+            errorMessage = SejfError.inICloud.localizedDescription + L(" Przenieś cały folder sejfu (np. do ~/Sejf) i spróbuj ponownie.")
             return
         }
         self.joining = joining
@@ -292,25 +293,25 @@ final class AppModel: ObservableObject {
             panel.canChooseDirectories = true
             panel.canChooseFiles = false
             panel.canCreateDirectories = true
-            panel.prompt = "Wybierz"
-            panel.message = "Wybierz pusty folder na sejf — poza Pulpitem, Dokumentami i iCloud Drive"
+            panel.prompt = L("Wybierz")
+            panel.message = L("Wybierz pusty folder na sejf — poza Pulpitem, Dokumentami i iCloud Drive")
             panel.directoryURL = fm.homeDirectoryForCurrentUser
             guard panel.runModal() == .OK, let url = panel.url else { return }
             guard !Self.isProtectedFolder(url) else {
-                errorMessage = "Wybierz osobny folder tylko na sejf, a nie „\(url.lastPathComponent)”."
+                errorMessage = L("Wybierz osobny folder tylko na sejf, a nie „%@”.", url.lastPathComponent)
                 return
             }
             target = url
         }
         guard !CloudCheck.isInICloud(target) else { errorMessage = SejfError.inICloud.localizedDescription; return }
         guard !Vault.exists(on: target) else {
-            errorMessage = "W „\(target.path)” jest już sejf. Wybierz inną nazwę albo miejsce."
+            errorMessage = L("W „%@” jest już sejf. Wybierz inną nazwę albo miejsce.", target.path)
             return
         }
         do {
             try fm.createDirectory(at: target, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         } catch {
-            errorMessage = "Nie można utworzyć folderu: \(error.localizedDescription)"
+            errorMessage = L("Nie można utworzyć folderu: %@", error.localizedDescription)
             return
         }
         pendingVaultName = cleanName
@@ -337,7 +338,7 @@ final class AppModel: ObservableObject {
                 remember(info.url, name: opened.displayName)
                 screen = .unlock
             } catch {
-                errorMessage = "Nie można odczytać sejfu: \(error.localizedDescription)"
+                errorMessage = L("Nie można odczytać sejfu: %@", error.localizedDescription)
                 screen = .pickDrive
             }
         } else {
@@ -375,13 +376,13 @@ final class AppModel: ObservableObject {
         lock()
         do {
             try NSWorkspace.shared.unmountAndEjectDevice(at: url)
-            notice = "Nośnik „\(volume?.name ?? "")” można bezpiecznie wyjąć."
+            notice = L("Nośnik „%@” można bezpiecznie wyjąć.", volume?.name ?? "")
             volume = nil
             vault = nil
             refreshVolumes()
             screen = .pickDrive
         } catch {
-            errorMessage = "Nie udało się wysunąć: \(error.localizedDescription)"
+            errorMessage = L("Nie udało się wysunąć: %@", error.localizedDescription)
         }
     }
 
@@ -434,15 +435,7 @@ final class AppModel: ObservableObject {
 
     func warnStrayTouch() {
         strayTouchAt = Date()
-        errorMessage = """
-        Dotknięto YubiKey, gdy aplikacja o to nie prosiła — klucz „wpisał” swój kod OTP jak klawiatura. \
-        Usunąłem go z pola hasła.
-
-        Jak zrobić to dobrze:
-        1. Wpisz hasło.
-        2. Kliknij „Dalej”.
-        3. Dopiero gdy pojawi się „Teraz dotknij złotego przycisku”, dotknij klucza.
-        """
+        errorMessage = L("Dotknięto YubiKey, gdy aplikacja o to nie prosiła — klucz „wpisał” swój kod OTP jak klawiatura. Usunąłem go z pola hasła.\n\nJak zrobić to dobrze:\n1. Wpisz hasło.\n2. Kliknij „Dalej”.\n3. Dopiero gdy pojawi się „Teraz dotknij złotego przycisku”, dotknij klucza.")
     }
 
     /// Enter wysłany przez YubiKey zaraz po kodzie nie powinien uruchamiać odblokowania.
@@ -455,8 +448,8 @@ final class AppModel: ObservableObject {
         let label = key.name + (key.serial.map { " · \($0)" } ?? "")
         let name = pendingVaultName ?? volume.name
         let retry: (String) -> Void = { [weak self] pin in self?.createVault(owner: owner, password: password, pin: pin, failed: failed) }
-        run("Tworzenie sejfu…", { reporter -> (Vault, String) in
-            let fido = TouchingFIDO(reporter: reporter, after: "Tworzenie sejfu…", touches: 2, pin: pin)
+        run(L("Tworzenie sejfu…"), { reporter -> (Vault, String) in
+            let fido = TouchingFIDO(reporter: reporter, after: L("Tworzenie sejfu…"), touches: 2, pin: pin)
             return try Vault.create(on: volume.url, password: password, fido: fido, serial: key.serial, label: label,
                                     name: name, owner: owner)
         }, then: { [weak self] (result: (Vault, String)) in
@@ -473,16 +466,16 @@ final class AppModel: ObservableObject {
 
     func unlock(password: String, failed: (() -> Void)? = nil) {
         guard let vault else { return }
-        run("Odblokowywanie…", { reporter in
-            try vault.unlock(password: password, fido: TouchingFIDO(reporter: reporter, after: "Sprawdzanie hasła…"))
+        run(L("Odblokowywanie…"), { reporter in
+            try vault.unlock(password: password, fido: TouchingFIDO(reporter: reporter, after: L("Sprawdzanie hasła…")))
         }, then: { [weak self] in self?.didUnlock() }, failed: failed)
     }
 
     func unlock(recoveryCode: String) {
         guard let vault else { return }
-        run("Odblokowywanie hasłem odzyskiwania…", { _ in try vault.unlock(recoveryCode: recoveryCode) }) { [weak self] in
+        run(L("Odblokowywanie hasłem odzyskiwania…"), { _ in try vault.unlock(recoveryCode: recoveryCode) }) { [weak self] in
             self?.didUnlock()
-            self?.notice = "Odblokowano hasłem odzyskiwania. Jeśli zgubiłeś YubiKey: 🔑 → Wymień klucz główny (z nowym kluczem)."
+            self?.notice = L("Odblokowano hasłem odzyskiwania. Jeśli zgubiłeś YubiKey: 🔑 → Wymień klucz główny (z nowym kluczem).")
         }
     }
 
@@ -491,7 +484,7 @@ final class AppModel: ObservableObject {
         touch()
         startTick()
         reloadEntries()
-        if let owner = vault?.unlockedSlot?.owner, notice == nil { notice = "Witaj, \(owner)!" }
+        if let owner = vault?.unlockedSlot?.owner, notice == nil { notice = L("Witaj, %@!", owner) }
         if joining {
             joining = false
             showAddUser = true
@@ -510,7 +503,7 @@ final class AppModel: ObservableObject {
         tickTimer = nil
         if recoveryCode != nil {
             recoveryCode = nil
-            notice = "Hasło odzyskiwania ukryto przy blokadzie. Jeśli go nie zapisałeś: 🔑 → Nowe hasło."
+            notice = L("Hasło odzyskiwania ukryto przy blokadzie. Jeśli go nie zapisałeś: 🔑 → Nowe hasło.")
         }
         for dir in previewDirs { try? Shredder.shredTree(dir) }
         previewDirs = []
@@ -536,8 +529,8 @@ final class AppModel: ObservableObject {
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
-        panel.prompt = "Wybierz"
-        panel.message = "Wybierz pliki lub foldery do zaszyfrowania w sejfie"
+        panel.prompt = L("Wybierz")
+        panel.message = L("Wybierz pliki lub foldery do zaszyfrowania w sejfie")
         return panel.runModal() == .OK ? panel.urls : []
     }
 
@@ -554,14 +547,14 @@ final class AppModel: ObservableObject {
         guard let vault else { return }
         touch()
         let existing = Dictionary(entries.map { ($0.path, $0) }, uniquingKeysWith: { a, _ in a })
-        run("Szyfrowanie…", { reporter -> (Int, [String]) in
+        run(L("Szyfrowanie…"), { reporter -> (Int, [String]) in
             let (files, skipped) = Vault.collectFiles(items, base: base)
             let total = max(1, files.reduce(Int64(0)) { $0 + ((try? $1.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0) })
             var done: Int64 = 0
-            var problems: [String] = skipped.map { "\($0): pominięto (dowiązanie lub plik specjalny) — zostaje na miejscu" }
+            var problems: [String] = skipped.map { L("%@: pominięto (dowiązanie lub plik specjalny) — zostaje na miejscu", $0) }
             var encrypted = 0
             for (i, file) in files.enumerated() {
-                reporter.update("Szyfrowanie \(i + 1)/\(files.count): \(file.url.lastPathComponent)")
+                reporter.update(L("Szyfrowanie %@/%@: %@", i + 1, files.count, file.url.lastPathComponent))
                 do {
                     let start = done
                     let (entry, sha) = try vault.encryptFile(at: file.url, relativePath: file.relative) { n in
@@ -571,22 +564,22 @@ final class AppModel: ObservableObject {
                     encrypted += 1
                     if let old = existing[file.relative] { try? vault.delete(old) }
                     if shredOriginals {
-                        reporter.update("Weryfikacja i usuwanie oryginału: \(file.url.lastPathComponent)")
+                        reporter.update(L("Weryfikacja i usuwanie oryginału: %@", file.url.lastPathComponent))
                         guard try vault.verify(entry, sha256: sha) else {
-                            problems.append("\(file.relative): weryfikacja nie powiodła się — oryginał zachowany")
+                            problems.append(L("%@: weryfikacja nie powiodła się — oryginał zachowany", file.relative))
                             continue
                         }
                         try Shredder.shred(file.url)
                     }
                 } catch {
-                    problems.append("\(file.relative): \(error.localizedDescription)")
+                    problems.append(L("%@: %@", file.relative, error.localizedDescription))
                 }
             }
             if shredOriginals {
                 // Usuwamy tylko foldery, w których naprawdę nic nie zostało.
                 for item in items where (try? FileManager.default.attributesOfItem(atPath: item.path))?[.type] as? FileAttributeType == .typeDirectory {
                     if !Shredder.removeEmptyDirectories(item) {
-                        problems.append("\(item.lastPathComponent): folder nie jest pusty — zostawiony")
+                        problems.append(L("%@: folder nie jest pusty — zostawiony", item.lastPathComponent))
                     }
                 }
             }
@@ -595,9 +588,9 @@ final class AppModel: ObservableObject {
             guard let self else { return }
             self.reloadEntries()
             if result.1.isEmpty {
-                self.notice = "Zaszyfrowano plików: \(result.0)" + (shredOriginals ? ". Oryginały usunięte." : ".")
+                self.notice = L("Zaszyfrowano plików: %@", result.0) + (shredOriginals ? L(". Oryginały usunięte.") : ".")
             } else {
-                self.errorMessage = "Zaszyfrowano plików: \(result.0). Uwagi:\n" + result.1.prefix(10).joined(separator: "\n")
+                self.errorMessage = L("Zaszyfrowano plików: %@. Uwagi:\n", result.0) + result.1.prefix(10).joined(separator: "\n")
             }
         }
     }
@@ -609,26 +602,26 @@ final class AppModel: ObservableObject {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.prompt = "Odszyfruj tutaj"
-        panel.message = "Gdzie zapisać odszyfrowane pliki? Nie na Pulpicie ani w Dokumentach (iCloud) i nie na pendrivie."
+        panel.prompt = L("Odszyfruj tutaj")
+        panel.message = L("Gdzie zapisać odszyfrowane pliki? Nie na Pulpicie ani w Dokumentach (iCloud) i nie na pendrivie.")
         panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         guard panel.runModal() == .OK, let dir = panel.url else { return }
         guard !CloudCheck.isInICloud(dir) else {
-            errorMessage = "Ten folder jest synchronizowany z iCloud — odszyfrowane pliki trafiłyby na serwery Apple. Wybierz np. Pobrane."
+            errorMessage = L("Ten folder jest synchronizowany z iCloud — odszyfrowane pliki trafiłyby na serwery Apple. Wybierz np. Pobrane.")
             return
         }
-        run("Odszyfrowywanie…", { reporter -> Int in
+        run(L("Odszyfrowywanie…"), { reporter -> Int in
             let total = max(1, selected.reduce(Int64(0)) { $0 + $1.size })
             var done: Int64 = 0
             for (i, e) in selected.enumerated() {
-                reporter.update("Odszyfrowywanie \(i + 1)/\(selected.count): \(e.name)")
+                reporter.update(L("Odszyfrowywanie %@/%@: %@", i + 1, selected.count, e.name))
                 let start = done
                 try vault.decrypt(e, into: dir) { n in reporter.update(progress: .some(Double(start + n) / Double(total))) }
                 done += e.size
             }
             return selected.count
         }) { [weak self] (count: Int) in
-            self?.notice = "Odszyfrowano plików: \(count). Usuń je, gdy przestaną być potrzebne."
+            self?.notice = L("Odszyfrowano plików: %@. Usuń je, gdy przestaną być potrzebne.", count)
             NSWorkspace.shared.activateFileViewerSelecting([dir])
         }
     }
@@ -639,7 +632,7 @@ final class AppModel: ObservableObject {
         touch()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(Self.previewPrefix + UUID().uuidString)
         previewDirs.append(dir)
-        run("Otwieranie \(entry.name)…", { _ -> URL in
+        run(L("Otwieranie %@…", entry.name), { _ -> URL in
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
             return try vault.decrypt(entry, into: dir, keepFolders: false)
@@ -660,13 +653,14 @@ final class AppModel: ObservableObject {
     func delete(_ selected: [FileEntry]) {
         guard let vault else { return }
         touch()
-        run("Usuwanie…", { _ in for e in selected { try vault.delete(e) } }) { [weak self] in self?.reloadEntries() }
+        run(L("Usuwanie…"), { _ in for e in selected { try vault.delete(e) } }) { [weak self] in self?.reloadEntries() }
     }
 
     // MARK: - Klucze
 
-    private static let rotationHint = "Stare kopie sejfu (np. z kopii zapasowej) nadal otwiera poprzedni dostęp — " +
-        "aby to wykluczyć: 🔑 → Wymień klucz główny."
+    private static var rotationHint: String {
+        L("Stare kopie sejfu (np. z kopii zapasowej) nadal otwiera poprzedni dostęp — aby to wykluczyć: 🔑 → Wymień klucz główny.")
+    }
 
     /// Nowy użytkownik albo zapasowy klucz istniejącego (ten sam `owner`).
     func addUser(owner: String, serial: Int?, keyName: String, password: String, pin: String? = nil) {
@@ -677,13 +671,13 @@ final class AppModel: ObservableObject {
         let retry: (String) -> Void = { [weak self] pin in
             self?.addUser(owner: owner, serial: serial, keyName: keyName, password: password, pin: pin)
         }
-        run(existing ? "Dodawanie zapasowego klucza…" : "Dodawanie użytkownika…", { reporter in
+        run(existing ? L("Dodawanie zapasowego klucza…") : L("Dodawanie użytkownika…"), { reporter in
             try vault.addFIDOKey(password: password,
-                                 fido: TouchingFIDO(reporter: reporter, after: "Zapisywanie…", touches: 2, pin: pin),
+                                 fido: TouchingFIDO(reporter: reporter, after: L("Zapisywanie…"), touches: 2, pin: pin),
                                  serial: serial, label: label, owner: owner)
         }, then: { [weak self] in
             self?.keyslots = vault.header.keyslots
-            self?.notice = existing ? "Dodano zapasowy klucz dla: \(owner)." : "Dodano użytkownika „\(owner)”. Od teraz otwiera ten sejf swoim kluczem i hasłem."
+            self?.notice = existing ? L("Dodano zapasowy klucz dla: %@.", owner) : L("Dodano użytkownika „%@”. Od teraz otwiera ten sejf swoim kluczem i hasłem.", owner)
         }, pinRetry: retry)
     }
 
@@ -693,7 +687,7 @@ final class AppModel: ObservableObject {
         touch()
         let fido = keyslots.filter { $0.kind == .fido2 }
         guard let target = slot ?? connectedFIDOSlot ?? (fido.count == 1 ? fido.first : nil) else {
-            errorMessage = "Włóż YubiKey, którego hasło chcesz zmienić."
+            errorMessage = L("Włóż YubiKey, którego hasło chcesz zmienić.")
             return
         }
         changePasswordSlot = target
@@ -703,22 +697,22 @@ final class AppModel: ObservableObject {
         guard let vault else { return }
         touch()
         if connectedKeyChecked, connectedSlotID != slot.id {
-            errorMessage = "Podłączony klucz nie należy do „\(slot.displayName)”. Włóż właściwy klucz."
+            errorMessage = L("Podłączony klucz nie należy do „%@”. Włóż właściwy klucz.", slot.displayName)
             return
         }
-        run("Zmiana hasła…", { reporter in
+        run(L("Zmiana hasła…"), { reporter in
             try vault.changePassword(slotID: slot.id, currentPassword: currentPassword, newPassword: newPassword,
-                                     fido: TouchingFIDO(reporter: reporter, after: "Zapisywanie nowego hasła…"))
+                                     fido: TouchingFIDO(reporter: reporter, after: L("Zapisywanie nowego hasła…")))
         }) { [weak self] in
             self?.keyslots = vault.header.keyslots
-            self?.notice = "Hasło zmienione. " + Self.rotationHint
+            self?.notice = L("Hasło zmienione. ") + Self.rotationHint
         }
     }
 
     func regenerateRecovery() {
         guard let vault else { return }
         touch()
-        run("Generowanie hasła odzyskiwania…", { _ in try vault.regenerateRecoveryCode() }) { [weak self] (code: String) in
+        run(L("Generowanie hasła odzyskiwania…"), { _ in try vault.regenerateRecoveryCode() }) { [weak self] (code: String) in
             self?.keyslots = vault.header.keyslots
             self?.recoveryCode = code
         }
@@ -727,9 +721,9 @@ final class AppModel: ObservableObject {
     func removeSlot(_ slot: Keyslot) {
         guard let vault else { return }
         touch()
-        run("Usuwanie klucza…", { _ in try vault.removeSlot(id: slot.id) }) { [weak self] in
+        run(L("Usuwanie klucza…"), { _ in try vault.removeSlot(id: slot.id) }) { [weak self] in
             self?.keyslots = vault.header.keyslots
-            self?.notice = "Usunięto „\(slot.label)”. " + Self.rotationHint
+            self?.notice = L("Usunięto „%@”. ", slot.label) + Self.rotationHint
         }
     }
 
@@ -747,16 +741,16 @@ final class AppModel: ObservableObject {
     func rotateMasterKey(slot: Keyslot, password: String) {
         guard let vault else { return }
         touch()
-        run("Wymiana klucza głównego…", { reporter -> String in
+        run(L("Wymiana klucza głównego…"), { reporter -> String in
             try vault.rotateMasterKey(keepSlotID: slot.id, password: password,
-                                      fido: TouchingFIDO(reporter: reporter, after: "Szyfrowanie plików od nowa…")) { done, total in
-                reporter.update("Szyfrowanie plików od nowa: \(done)/\(total)", progress: .some(total == 0 ? 1 : Double(done) / Double(total)))
+                                      fido: TouchingFIDO(reporter: reporter, after: L("Szyfrowanie plików od nowa…"))) { done, total in
+                reporter.update(L("Szyfrowanie plików od nowa: %@/%@", done, total), progress: .some(total == 0 ? 1 : Double(done) / Double(total)))
             }
         }) { [weak self] (code: String) in
             guard let self else { return }
             self.reloadEntries()
             self.recoveryCode = code
-            self.notice = "Klucz główny wymieniony. Stare klucze, hasła i kopie nagłówka nie otwierają już tego sejfu."
+            self.notice = L("Klucz główny wymieniony. Stare klucze, hasła i kopie nagłówka nie otwierają już tego sejfu.")
         }
     }
 
@@ -774,7 +768,7 @@ final class AppModel: ObservableObject {
                 self.autoLockRemaining = max(0, left)
                 if left <= 0 {
                     self.lock()
-                    self.notice = "Sejf zablokowano automatycznie po \(Self.autoLockSeconds / 60) min bezczynności."
+                    self.notice = L("Sejf zablokowano automatycznie po %@ min bezczynności.", Self.autoLockSeconds / 60)
                 }
             }
         }
@@ -800,7 +794,7 @@ final class AppModel: ObservableObject {
                         self.volume = nil
                         self.vault = nil
                         self.screen = .pickDrive
-                        self.notice = "Nośnik został odłączony — sejf zablokowany."
+                        self.notice = L("Nośnik został odłączony — sejf zablokowany.")
                     }
                     self.refreshVolumes()
                     if self.screen == .pickDrive, self.volume == nil, name == NSWorkspace.didMountNotification,

@@ -1,5 +1,12 @@
 # Historia zmian
 
+## 1.4
+
+- **Wersja angielska:** cały interfejs aplikacji i dokumentacja po angielsku (`Docs/en/`).
+- Język idzie za macOS (polski → polski, inny → angielski). Można go zmienić w menu **Sejf → Język / Language** albo w systemowych ustawieniach języka dla aplikacji.
+- Daty i rozmiary plików są formatowane w wybranym języku.
+- Testy sprawdzają, że każdy tekst jest przetłumaczony i że miejsca na wartości się zgadzają.
+
 ## 1.3
 
 - **Tańsze klucze:** obsługa **Security Key NFC / C NFC** i innych kluczy FIDO2 z `hmac-secret`. Wykrywanie idzie przez FIDO2 zamiast CCID, a model i numer seryjny są dopisywane, gdy klucz je udostępnia.

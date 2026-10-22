@@ -17,16 +17,16 @@ public enum SejfError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .locked: return "Sejf jest zablokowany."
-        case .randomFailed: return "Nie udało się wygenerować losowych danych."
-        case .kdfFailed: return "Błąd wyprowadzania klucza."
-        case .badCredentials: return "Nieprawidłowe hasło lub YubiKey."
-        case .corrupt(let m): return "Uszkodzone dane: \(m)"
+        case .locked: return L("Sejf jest zablokowany.")
+        case .randomFailed: return L("Nie udało się wygenerować losowych danych.")
+        case .kdfFailed: return L("Błąd wyprowadzania klucza.")
+        case .badCredentials: return L("Nieprawidłowe hasło lub YubiKey.")
+        case .corrupt(let m): return L("Uszkodzone dane: %@", m)
         case .io(let m): return m
-        case .yubikey(let m): return "YubiKey: \(m)"
+        case .yubikey(let m): return L("YubiKey: %@", m)
         case .invalidInput(let m): return m
-        case .lastKey: return "Nie można usunąć ostatniego klucza YubiKey."
-        case .inICloud: return "Ten folder jest synchronizowany z iCloud — jawne pliki trafiłyby na serwery Apple. Wybierz folder poza Pulpitem, Dokumentami i iCloud Drive (np. ~/Sejf)."
+        case .lastKey: return L("Nie można usunąć ostatniego klucza YubiKey.")
+        case .inICloud: return L("Ten folder jest synchronizowany z iCloud — jawne pliki trafiłyby na serwery Apple. Wybierz folder poza Pulpitem, Dokumentami i iCloud Drive (np. ~/Sejf).")
         }
     }
 }
@@ -156,7 +156,7 @@ public enum Shredder {
             try fm.removeItem(at: url)
             return
         }
-        guard type == .typeRegular else { throw SejfError.io("„\(url.lastPathComponent)” nie jest zwykłym plikiem.") }
+        guard type == .typeRegular else { throw SejfError.io(L("„%@” nie jest zwykłym plikiem.", url.lastPathComponent)) }
         let links = (attrs[.referenceCount] as? NSNumber)?.intValue ?? 1
         let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
         if links == 1, size > 0 {

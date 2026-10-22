@@ -28,6 +28,7 @@ done
 lipo -create "$WORK"/SejfUSB-arm64 "$WORK"/SejfUSB-x86_64 -output "$APP/Contents/MacOS/SejfUSB"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 [[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+for lproj in Resources/*.lproj(N); do cp -R "$lproj" "$APP/Contents/Resources/"; done
 codesign --force --sign - --options runtime --entitlements Resources/Entitlements.plist "$APP"
 
 DEST="${DEST:-$HOME/Applications}"

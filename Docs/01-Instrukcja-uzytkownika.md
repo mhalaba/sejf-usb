@@ -1,4 +1,4 @@
-# Sejf USB 1.3 — instrukcja użytkownika
+# Sejf USB 1.4 — instrukcja użytkownika
 
 Sejf USB szyfruje pliki w folderze `Sejf.vault`, który może leżeć na pendrivie albo na Macu. Do otwarcia sejfu potrzebne są dwie rzeczy:
 
@@ -6,6 +6,8 @@ Sejf USB szyfruje pliki w folderze `Sejf.vault`, który może leżeć na pendriv
 - **YubiKey**, którego musisz fizycznie dotknąć.
 
 Bez którejkolwiek z nich danych nie da się odczytać. Aplikacja działa w 100% offline.
+
+**Język:** aplikacja mówi po polsku, gdy macOS jest po polsku, a w innych przypadkach po angielsku. Język zmienisz w menu **Sejf → Język / Language** albo dla samej aplikacji w **Ustawieniach systemowych → Ogólne → Język i region → Aplikacje**. English documentation: [Docs/en](en/01-User-guide.md).
 
 ## Wymagania
 

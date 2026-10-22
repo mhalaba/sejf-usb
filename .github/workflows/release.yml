@@ -24,7 +24,7 @@ jobs:
           mkdir -p "dist/$PKG/Dokumentacja"
           STRICT=0 DEST="dist/$PKG/Aplikacja" ./build.sh
           ditto Docs "dist/$PKG/Dokumentacja"
-          cp README.md LICENSE "dist/$PKG/"
+          cp README.md README.en.md LICENSE "dist/$PKG/"
           (cd "dist/$PKG" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS.txt)
           (cd dist && ditto -c -k --keepParent "$PKG" "$PKG.zip" && shasum -a 256 "$PKG.zip" > "$PKG.zip.sha256")
 

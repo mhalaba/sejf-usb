@@ -102,20 +102,18 @@ enum PasswordStrength {
 
     static func describe(_ p: String) -> (String, Color, Double) {
         let b = bits(p)
-        if p.count < Vault.minPasswordLength { return ("Za krótkie (min. \(Vault.minPasswordLength) znaków)", Theme.bad, min(0.25, b / 120)) }
-        if b < 55 { return ("Słabe", Theme.bad, b / 120) }
-        if b < 75 { return ("Średnie", Theme.warn, b / 120) }
-        return ("Silne", Theme.good, min(1, b / 110))
+        if p.count < Vault.minPasswordLength { return (L("Za krótkie (min. %@ znaków)", Vault.minPasswordLength), Theme.bad, min(0.25, b / 120)) }
+        if b < 55 { return (L("Słabe"), Theme.bad, b / 120) }
+        if b < 75 { return (L("Średnie"), Theme.warn, b / 120) }
+        return (L("Silne"), Theme.good, min(1, b / 110))
     }
 }
 
-let byteFormatter: ByteCountFormatter = {
-    let f = ByteCountFormatter()
-    f.countStyle = .file
-    return f
-}()
+func formatBytes(_ n: Int64) -> String { n.formatted(.byteCount(style: .file).locale(Lang.locale)) }
 
-func formatBytes(_ n: Int64) -> String { byteFormatter.string(fromByteCount: n) }
+func formatDate(_ d: Date, time: Bool = true) -> String {
+    d.formatted(Date.FormatStyle(date: .abbreviated, time: time ? .shortened : .omitted, locale: Lang.locale))
+}
 
 /// Zamiennik @State (w tym środowisku bez Xcode brak wtyczki makr SwiftUI) — lokalny stan widoku.
 @propertyWrapper

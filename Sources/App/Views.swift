@@ -34,7 +34,7 @@ struct ContentView: View {
             if let failure = model.selfTestFailure { SelfTestFailureView(message: failure) }
             if let notice = model.notice { NoticeToast(text: notice) { model.notice = nil } }
         }
-        .alert("Błąd", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
+        .alert(L("Błąd"), isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(model.errorMessage ?? "") }
         .sheet(isPresented: Binding(get: { model.recoveryCode != nil }, set: { if !$0 { model.recoveryCode = nil } })) {
@@ -63,15 +63,15 @@ struct HeaderBar: View {
             if let v = model.volume {
                 Button { model.goHome() } label: {
                     StatusPill(icon: v.format == "folder" ? "lock.shield" : "externaldrive.fill", text: v.name, color: Theme.accent)
-                }.buttonStyle(.plain).help("Twoje sejfy — przełącz na inny")
+                }.buttonStyle(.plain).help(L("Twoje sejfy — przełącz na inny"))
             }
             if model.screen == .vault, let user = model.currentUser {
                 StatusPill(icon: "person.fill", text: user, color: Theme.accent2)
             }
             yubiPill
             if model.screen == .vault {
-                StatusPill(icon: "lock.open.fill", text: "Odblokowany · \(model.autoLockRemaining / 60):\(String(format: "%02d", model.autoLockRemaining % 60))", color: Theme.good)
-                    .help("Automatyczna blokada po bezczynności")
+                StatusPill(icon: "lock.open.fill", text: L("Odblokowany · %@:%@", model.autoLockRemaining / 60, String(format: "%02d", model.autoLockRemaining % 60)), color: Theme.good)
+                    .help(L("Automatyczna blokada po bezczynności"))
             }
         }
         .padding(.leading, 84).padding(.trailing, 20).padding(.vertical, 12)
@@ -81,9 +81,9 @@ struct HeaderBar: View {
 
     @ViewBuilder var yubiPill: some View {
         if let k = model.keys.first {
-            StatusPill(icon: "key.fill", text: k.name + (model.keys.count > 1 ? " +\(model.keys.count - 1)" : ""), color: Theme.good)
+            StatusPill(icon: "key.fill", text: k.name + (model.keys.count > 1 ? L(" +%@", model.keys.count - 1) : ""), color: Theme.good)
         } else {
-            StatusPill(icon: "key", text: "Włóż YubiKey", color: Theme.warn)
+            StatusPill(icon: "key", text: L("Włóż YubiKey"), color: Theme.warn)
         }
     }
 }
@@ -108,15 +108,15 @@ struct HomeView: View {
     // Nowa instalacja: trzy drogi startu.
     var welcome: some View {
         VStack(spacing: 26) {
-            Hero(icon: "lock.shield.fill", title: "Witaj w Sejf USB",
-                 subtitle: "Szyfrowany sejf na pliki — otwierasz go hasłem i dotknięciem YubiKeya.")
+            Hero(icon: "lock.shield.fill", title: L("Witaj w Sejf USB"),
+                 subtitle: L("Szyfrowany sejf na pliki — otwierasz go hasłem i dotknięciem YubiKeya."))
             HStack(alignment: .top, spacing: 16) {
-                StartCard(icon: "plus.circle.fill", title: "Utwórz nowy sejf",
-                          text: "Pierwszy sejf na tym Macu albo na pendrivie. Potrzebujesz YubiKeya.") { model.showNewVault = true }
-                StartCard(icon: "folder.fill.badge.person.crop", title: "Otwórz mój sejf",
-                          text: "Masz już sejf (np. na pendrivie) i swój YubiKey z hasłem.") { model.addExistingVault(joining: false) }
-                StartCard(icon: "person.badge.plus", title: "Dołącz do sejfu",
-                          text: "Ktoś udostępnia Ci swój sejf. Osoba z dostępem odblokuje go przy Tobie, a Ty dodasz swój klucz.") {
+                StartCard(icon: "plus.circle.fill", title: L("Utwórz nowy sejf"),
+                          text: L("Pierwszy sejf na tym Macu albo na pendrivie. Potrzebujesz YubiKeya.")) { model.showNewVault = true }
+                StartCard(icon: "folder.fill.badge.person.crop", title: L("Otwórz mój sejf"),
+                          text: L("Masz już sejf (np. na pendrivie) i swój YubiKey z hasłem.")) { model.addExistingVault(joining: false) }
+                StartCard(icon: "person.badge.plus", title: L("Dołącz do sejfu"),
+                          text: L("Ktoś udostępnia Ci swój sejf. Osoba z dostępem odblokuje go przy Tobie, a Ty dodasz swój klucz.")) {
                     model.addExistingVault(joining: true)
                 }
             }
@@ -127,13 +127,13 @@ struct HomeView: View {
     var list: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("Twoje sejfy").font(.system(size: 26, weight: .bold, design: .rounded))
+                Text(L("Twoje sejfy")).font(.system(size: 26, weight: .bold, design: .rounded))
                 Spacer()
-                Button { model.addExistingVault(joining: true) } label: { Label("Dołącz do sejfu", systemImage: "person.badge.plus") }
+                Button { model.addExistingVault(joining: true) } label: { Label(L("Dołącz do sejfu"), systemImage: "person.badge.plus") }
                     .buttonStyle(GhostButtonStyle())
-                Button { model.addExistingVault(joining: false) } label: { Label("Otwórz istniejący", systemImage: "folder") }
+                Button { model.addExistingVault(joining: false) } label: { Label(L("Otwórz istniejący"), systemImage: "folder") }
                     .buttonStyle(GhostButtonStyle())
-                Button { model.showNewVault = true } label: { Label("Nowy sejf", systemImage: "plus") }
+                Button { model.showNewVault = true } label: { Label(L("Nowy sejf"), systemImage: "plus") }
                     .buttonStyle(PrimaryButtonStyle())
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
@@ -144,20 +144,20 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button("Pokaż w Finderze") { NSWorkspace.shared.activateFileViewerSelecting([known.url.appendingPathComponent(Vault.folderName)]) }
+                        Button(L("Pokaż w Finderze")) { NSWorkspace.shared.activateFileViewerSelecting([known.url.appendingPathComponent(Vault.folderName)]) }
                             .disabled(!known.isAvailable)
-                        Button("Usuń z listy (pliki zostają)") { model.forget(known) }
+                        Button(L("Usuń z listy (pliki zostają)")) { model.forget(known) }
                     }
                 }
                 ForEach(model.discoveredVaults) { v in
                     Button { model.select(v) } label: {
-                        VaultCard(icon: "externaldrive.fill", title: "Sejf na „\(v.name)”", subtitle: "Znaleziono na podłączonym nośniku",
+                        VaultCard(icon: "externaldrive.fill", title: L("Sejf na „%@”", v.name), subtitle: L("Znaleziono na podłączonym nośniku"),
                                   available: true)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            Text("Sejfy są na liście tylko na tym Macu. Usunięcie z listy nie kasuje plików.")
+            Text(L("Sejfy są na liście tylko na tym Macu. Usunięcie z listy nie kasuje plików."))
                 .font(.system(size: 11)).foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: 860)
@@ -166,7 +166,7 @@ struct HomeView: View {
     static func location(_ url: URL) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         if url.path.hasPrefix("/Volumes/") {
-            return "Pendrive „" + (url.pathComponents.dropFirst(2).first ?? "") + "”"
+            return L("Pendrive „") + (url.pathComponents.dropFirst(2).first ?? "") + "”"
         }
         return url.path.hasPrefix(home) ? "~" + url.path.dropFirst(home.count) : url.path
     }
@@ -211,7 +211,7 @@ struct VaultCard: View {
                     .font(.system(size: 22)).foregroundStyle(Theme.gradient).frame(width: 34)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                    Text(available ? subtitle : subtitle + " · niedostępny").font(.system(size: 12))
+                    Text(available ? subtitle : subtitle + L(" · niedostępny")).font(.system(size: 12))
                         .foregroundStyle(available ? Theme.muted : Theme.warn).lineLimit(1)
                 }
                 Spacer()
@@ -235,28 +235,28 @@ struct NewVaultSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Nowy sejf").font(.system(size: 22, weight: .bold, design: .rounded))
-            Text("Nazwa sejfu jest widoczna bez odblokowania — nie wpisuj w niej nic tajnego.")
+            Text(L("Nowy sejf")).font(.system(size: 22, weight: .bold, design: .rounded))
+            Text(L("Nazwa sejfu jest widoczna bez odblokowania — nie wpisuj w niej nic tajnego."))
                 .font(.system(size: 12)).foregroundStyle(Theme.muted)
-            TextField("Nazwa, np. Dokumenty rodzinne", text: $name).field()
-            Text("Gdzie zapisać sejf?").font(.system(size: 13, weight: .semibold))
+            TextField(L("Nazwa, np. Dokumenty rodzinne"), text: $name).field()
+            Text(L("Gdzie zapisać sejf?")).font(.system(size: 13, weight: .semibold))
             VStack(spacing: 8) {
-                option(.mac, icon: "laptopcomputer", title: "Na tym Macu",
-                       detail: "~/Sejfy/\(folderName) — poza iCloud, z kopią w Time Machine")
+                option(.mac, icon: "laptopcomputer", title: L("Na tym Macu"),
+                       detail: L("~/Sejfy/%@ — poza iCloud, z kopią w Time Machine", folderName))
                 ForEach(model.volumes) { v in
-                    option(.volume(v.url), icon: "externaldrive.fill", title: "Na pendrivie „\(v.name)”",
-                           detail: v.hasVault ? "w folderze „\(folderName)” (na nośniku jest już inny sejf)" : "\(formatBytes(v.available)) wolne")
+                    option(.volume(v.url), icon: "externaldrive.fill", title: L("Na pendrivie „%@”", v.name),
+                           detail: v.hasVault ? L("w folderze „%@” (na nośniku jest już inny sejf)", folderName) : L("%@ wolne", formatBytes(v.available)))
                 }
-                option(.custom, icon: "folder", title: "W wybranym folderze…", detail: "poza Pulpitem, Dokumentami i iCloud Drive")
+                option(.custom, icon: "folder", title: L("W wybranym folderze…"), detail: L("poza Pulpitem, Dokumentami i iCloud Drive"))
             }
             HStack {
                 Spacer()
-                Button("Anuluj") { dismiss() }.buttonStyle(GhostButtonStyle())
+                Button(L("Anuluj")) { dismiss() }.buttonStyle(GhostButtonStyle())
                 Button {
                     let (n, l) = (name, location)
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { model.prepareNewVault(name: n, location: l) }
-                } label: { Label("Dalej", systemImage: "arrow.right") }
+                } label: { Label(L("Dalej"), systemImage: "arrow.right") }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(Vault.cleanName(name) == nil)
                     .keyboardShortcut(.defaultAction)
@@ -330,18 +330,18 @@ struct YubiKeyStatusCard: View {
     var ready: Bool { model.keys.first?.supportsHMACSecret == true }
     var color: Color { ready ? Theme.good : Theme.warn }
     var title: String {
-        guard let k = model.keys.first else { return "Włóż YubiKey do portu USB" }
-        if !k.supportsHMACSecret { return "\(k.name) — nieobsługiwany" }
-        return "\(k.name) gotowy" + (k.serial.map { " · nr \($0)" } ?? "")
+        guard let k = model.keys.first else { return L("Włóż YubiKey do portu USB") }
+        if !k.supportsHMACSecret { return L("%@ — nieobsługiwany", k.name) }
+        return L("%@ gotowy", k.name) + (k.serial.map { L(" · nr %@", $0) } ?? "")
     }
     var detail: String {
         guard let k = model.keys.first else {
-            return "Klucz FIDO2: YubiKey 5, Security Key NFC / C NFC lub inny z obsługą hmac-secret. Na Macu wkładasz go do USB."
+            return L("Klucz FIDO2: YubiKey 5, Security Key NFC / C NFC lub inny z obsługą hmac-secret. Na Macu wkładasz go do USB.")
         }
         if !k.supportsHMACSecret {
-            return "Ten klucz nie obsługuje FIDO2 hmac-secret (np. starszy klucz tylko U2F). Użyj YubiKey 5 albo Security Key z FIDO2."
+            return L("Ten klucz nie obsługuje FIDO2 hmac-secret (np. starszy klucz tylko U2F). Użyj YubiKey 5 albo Security Key z FIDO2.")
         }
-        return "Nie dotykaj klucza teraz. Kliknij przycisk poniżej — gdy pojawi się „Dotknij przycisku na YubiKey…”, wtedy dotknij."
+        return L("Nie dotykaj klucza teraz. Kliknij przycisk poniżej — gdy pojawi się „Dotknij przycisku na YubiKey…”, wtedy dotknij.")
     }
 }
 
@@ -358,12 +358,12 @@ struct SetupView: View {
         ScrollView {
             VStack(spacing: 24) {
                 Hero(icon: step == 1 ? "lock.shield.fill" : "key.horizontal.fill",
-                     title: "Nowy sejf na „\(model.volume?.name ?? "")”",
-                     subtitle: step == 1 ? "Krok 1 z 2 · ustaw hasło" : "Krok 2 z 2 · dodaj YubiKey")
+                     title: L("Nowy sejf na „%@”", model.volume?.name ?? ""),
+                     subtitle: step == 1 ? L("Krok 1 z 2 · ustaw hasło") : L("Krok 2 z 2 · dodaj YubiKey"))
                 StepDots(step: step)
                 if step == 1 { passwordStep } else {
                     TouchStepView(
-                        title: "Dodaj YubiKey",
+                        title: L("Dodaj YubiKey"),
                         start: { done in model.createVault(owner: owner, password: password, failed: done) },
                         back: { step = 1 })
                     .frame(maxWidth: 560)
@@ -376,23 +376,23 @@ struct SetupView: View {
     var passwordStep: some View {
         Card {
             VStack(alignment: .leading, spacing: 16) {
-                Label("Twoje imię", systemImage: "person.fill").font(.system(size: 13, weight: .semibold))
-                TextField("Np. Anna — widoczne dla innych użytkowników tego sejfu", text: $owner).field()
-                Label("Twoje hasło", systemImage: "character.cursor.ibeam").font(.system(size: 13, weight: .semibold))
-                SecureField("Hasło (min. \(Vault.minPasswordLength) znaków — najlepiej kilka słów)", text: $password).field()
+                Label(L("Twoje imię"), systemImage: "person.fill").font(.system(size: 13, weight: .semibold))
+                TextField(L("Np. Anna — widoczne dla innych użytkowników tego sejfu"), text: $owner).field()
+                Label(L("Twoje hasło"), systemImage: "character.cursor.ibeam").font(.system(size: 13, weight: .semibold))
+                SecureField(L("Hasło (min. %@ znaków — najlepiej kilka słów)", Vault.minPasswordLength), text: $password).field()
                     .guardsYubiKeyTyping($password, model)
-                SecureField("Powtórz hasło", text: $confirm).field()
+                SecureField(L("Powtórz hasło"), text: $confirm).field()
                     .guardsYubiKeyTyping($confirm, model)
                     .onSubmit { if canContinue { step = 2 } }
                 StrengthBar(password: password)
                 if !confirm.isEmpty && confirm != password {
-                    Text("Hasła się różnią").font(.system(size: 12)).foregroundStyle(Theme.bad)
+                    Text(L("Hasła się różnią")).font(.system(size: 12)).foregroundStyle(Theme.bad)
                 }
-                info("hand.raised.fill", "Na tym etapie nie dotykaj YubiKeya. Klucz dodasz w następnym kroku.", Theme.warn)
-                info("doc.text.fill", "Na koniec dostaniesz hasło odzyskiwania. Otwiera ono sejf, gdy zgubisz YubiKey.")
+                info("hand.raised.fill", L("Na tym etapie nie dotykaj YubiKeya. Klucz dodasz w następnym kroku."), Theme.warn)
+                info("doc.text.fill", L("Na koniec dostaniesz hasło odzyskiwania. Otwiera ono sejf, gdy zgubisz YubiKey."))
                 HStack {
                     Spacer()
-                    Button { step = 2 } label: { Label("Dalej: dodaj YubiKey", systemImage: "arrow.right") }
+                    Button { step = 2 } label: { Label(L("Dalej: dodaj YubiKey"), systemImage: "arrow.right") }
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(!canContinue)
                 }
@@ -454,10 +454,10 @@ struct TouchStepView: View {
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 if !ready { YubiKeyStatusCard() }
                 HStack {
-                    Button { back() } label: { Label("Wstecz", systemImage: "arrow.left") }.buttonStyle(GhostButtonStyle())
+                    Button { back() } label: { Label(L("Wstecz"), systemImage: "arrow.left") }.buttonStyle(GhostButtonStyle())
                     Spacer()
                     if attempted && model.busy == nil && ready {
-                        Button { begin() } label: { Label("Spróbuj ponownie", systemImage: "arrow.clockwise") }
+                        Button { begin() } label: { Label(L("Spróbuj ponownie"), systemImage: "arrow.clockwise") }
                             .buttonStyle(PrimaryButtonStyle())
                     }
                 }
@@ -469,18 +469,18 @@ struct TouchStepView: View {
     }
 
     var headline: String {
-        if !ready { return model.keys.isEmpty ? "Włóż YubiKey" : "Ten klucz nie obsługuje FIDO2" }
-        if model.busy?.touch == true { return "Teraz dotknij złotego przycisku" }
+        if !ready { return model.keys.isEmpty ? L("Włóż YubiKey") : L("Ten klucz nie obsługuje FIDO2") }
+        if model.busy?.touch == true { return L("Teraz dotknij złotego przycisku") }
         if model.busy != nil { return model.busy?.message ?? "" }
-        return attempted ? "Nie udało się — spróbuj ponownie" : "\(title)…"
+        return attempted ? L("Nie udało się — spróbuj ponownie") : "\(title)…"
     }
 
     var detail: String {
-        if !ready { return "Gdy klucz będzie gotowy, aplikacja sama poprosi o dotknięcie." }
+        if !ready { return L("Gdy klucz będzie gotowy, aplikacja sama poprosi o dotknięcie.") }
         if attempted && model.busy == nil {
-            return "Kliknij „Spróbuj ponownie”, a gdy pojawi się prośba, dotknij klucza (masz 30 sekund)."
+            return L("Kliknij „Spróbuj ponownie”, a gdy pojawi się prośba, dotknij klucza (masz 30 sekund).")
         }
-        return "Dotknij krótko złotego przycisku (masz 30 sekund). Aplikacja sama przejdzie dalej."
+        return L("Dotknij krótko złotego przycisku (masz 30 sekund). Aplikacja sama przejdzie dalej.")
     }
 
     func autoStart() {
@@ -526,9 +526,9 @@ struct UnlockView: View {
 
     var body: some View {
         VStack(spacing: 26) {
-            Hero(icon: "lock.fill", title: "„\(model.vault?.displayName ?? "Sejf")” jest zablokowany", subtitle: subtitle)
+            Hero(icon: "lock.fill", title: L("„%@” jest zablokowany", model.vault?.displayName ?? "Sejf"), subtitle: subtitle)
             if method == .touch && touchStep {
-                TouchStepView(title: "Odblokowywanie",
+                TouchStepView(title: L("Odblokowywanie"),
                               start: { _ in
                                   model.unlock(password: password, failed: { touchStep = false; password = ""; focused = true })
                               },
@@ -538,7 +538,7 @@ struct UnlockView: View {
                 if model.joining {
                     Card(padding: 16) {
                         Label {
-                            Text("Dołączasz do sejfu „\(model.vault?.displayName ?? "")”. Poproś osobę, która ma już dostęp (\(model.vault?.users.joined(separator: ", ") ?? "")), aby odblokowała go tutaj swoim kluczem i hasłem. Potem włożysz swój YubiKey i ustawisz własne hasło.")
+                            Text(L("Dołączasz do sejfu „%@”. Poproś osobę, która ma już dostęp (%@), aby odblokowała go tutaj swoim kluczem i hasłem. Potem włożysz swój YubiKey i ustawisz własne hasło.", model.vault?.displayName ?? "", model.vault?.users.joined(separator: ", ") ?? ""))
                                 .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
                         } icon: { Image(systemName: "person.badge.plus").foregroundStyle(Theme.accent) }
                     }
@@ -552,22 +552,22 @@ struct UnlockView: View {
                                 .font(.system(size: 15, design: .monospaced)).field().focused($focused)
                                 .onSubmit(submit)
                         case .touch:
-                            SecureField("Hasło sejfu", text: $password).field().focused($focused).onSubmit(submit)
+                            SecureField(L("Hasło sejfu"), text: $password).field().focused($focused).onSubmit(submit)
                                 .guardsYubiKeyTyping($password, model)
-                            Label("Nie dotykaj jeszcze YubiKeya — poproszę o to w następnym kroku.", systemImage: "hand.raised.fill")
+                            Label(L("Nie dotykaj jeszcze YubiKeya — poproszę o to w następnym kroku."), systemImage: "hand.raised.fill")
                                 .font(.system(size: 12)).foregroundStyle(Theme.warn)
                         }
                         HStack(alignment: .bottom) {
                             if method == .touch, model.vault?.hasRecoverySlot ?? false {
-                                Button("Zgubiłem YubiKey — użyj hasła odzyskiwania") { method = .recovery }
+                                Button(L("Zgubiłem YubiKey — użyj hasła odzyskiwania")) { method = .recovery }
                                     .buttonStyle(.link).font(.system(size: 12))
                             } else if method == .recovery {
-                                Button("Użyj hasła i YubiKeya") { method = .touch }
+                                Button(L("Użyj hasła i YubiKeya")) { method = .touch }
                                     .buttonStyle(.link).font(.system(size: 12))
                             }
                             Spacer()
                             Button(action: submit) {
-                                Label(method == .touch ? "Dalej: YubiKey" : "Odblokuj",
+                                Label(method == .touch ? L("Dalej: YubiKey") : L("Odblokuj"),
                                       systemImage: method == .touch ? "arrow.right" : "lock.open.fill")
                             }
                             .buttonStyle(PrimaryButtonStyle())
@@ -586,8 +586,8 @@ struct UnlockView: View {
 
     var subtitle: String {
         switch method {
-        case .touch: return touchStep ? "Krok 2 z 2 · YubiKey" : "Krok 1 z 2 · wpisz hasło"
-        case .recovery: return "Wpisz 32-znakowe hasło odzyskiwania."
+        case .touch: return touchStep ? L("Krok 2 z 2 · YubiKey") : L("Krok 1 z 2 · wpisz hasło")
+        case .recovery: return L("Wpisz 32-znakowe hasło odzyskiwania.")
         }
     }
 
@@ -674,20 +674,20 @@ struct RecoveryCodeSheet: View {
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "key.viewfinder").font(.system(size: 40)).foregroundStyle(Theme.gradient)
-            Text("Twoje hasło odzyskiwania").font(.system(size: 22, weight: .bold, design: .rounded))
+            Text(L("Twoje hasło odzyskiwania")).font(.system(size: 22, weight: .bold, design: .rounded))
             Text(code)
                 .font(.system(size: 20, weight: .semibold, design: .monospaced))
                 .padding(18)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.35)))
             VStack(alignment: .leading, spacing: 8) {
-                bullet("Zapisz go ręcznie na papierze i schowaj w bezpiecznym miejscu.")
-                bullet("NIE zapisuj go na tym pendrivie ani w zdjęciu/notatce na telefonie.")
-                bullet("Otwiera sejf bez YubiKeya i hasła — chroń je jak klucz do sejfu.")
-                bullet("Nie kopiuj go do schowka ani nie rób zrzutu ekranu.")
-                bullet("Nie zostanie pokazane ponownie (możesz później wygenerować nowe).")
+                bullet(L("Zapisz go ręcznie na papierze i schowaj w bezpiecznym miejscu."))
+                bullet(L("NIE zapisuj go na tym pendrivie ani w zdjęciu/notatce na telefonie."))
+                bullet(L("Otwiera sejf bez YubiKeya i hasła — chroń je jak klucz do sejfu."))
+                bullet(L("Nie kopiuj go do schowka ani nie rób zrzutu ekranu."))
+                bullet(L("Nie zostanie pokazane ponownie (możesz później wygenerować nowe)."))
             }
-            Toggle("Zapisałem hasło odzyskiwania w bezpiecznym miejscu", isOn: $confirmed).toggleStyle(.checkbox)
-            Button("Gotowe", action: done).buttonStyle(PrimaryButtonStyle()).disabled(!confirmed)
+            Toggle(L("Zapisałem hasło odzyskiwania w bezpiecznym miejscu"), isOn: $confirmed).toggleStyle(.checkbox)
+            Button(L("Gotowe"), action: done).buttonStyle(PrimaryButtonStyle()).disabled(!confirmed)
         }
         .padding(32)
         .frame(width: 560)
@@ -715,22 +715,22 @@ struct PinSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Image(systemName: "number.square.fill").font(.system(size: 26)).foregroundStyle(Theme.gradient)
-                Text("Kod PIN FIDO2 klucza").font(.system(size: 20, weight: .bold, design: .rounded))
+                Text(L("Kod PIN FIDO2 klucza")).font(.system(size: 20, weight: .bold, design: .rounded))
             }
-            Text("Ten klucz wymaga swojego kodu PIN FIDO2 przy rejestracji (ustawionego np. w Yubico Authenticator). To nie jest hasło sejfu — PIN zostaje tylko w kluczu i nie jest nigdzie zapisywany.")
+            Text(L("Ten klucz wymaga swojego kodu PIN FIDO2 przy rejestracji (ustawionego np. w Yubico Authenticator). To nie jest hasło sejfu — PIN zostaje tylko w kluczu i nie jest nigdzie zapisywany."))
                 .font(.system(size: 12)).foregroundStyle(Theme.muted).fixedSize(horizontal: false, vertical: true)
             if let message = prompt.message {
                 Label(message, systemImage: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(Theme.bad)
             }
-            SecureField("PIN FIDO2 (min. 4 znaki)", text: $pin).field().focused($focused)
+            SecureField(L("PIN FIDO2 (min. 4 znaki)"), text: $pin).field().focused($focused)
                 .guardsYubiKeyTyping($pin, model)
                 .onSubmit(submit)
-            Label("Po 8 błędnych próbach funkcje FIDO2 klucza zostaną zablokowane do czasu resetu.", systemImage: "info.circle")
+            Label(L("Po 8 błędnych próbach funkcje FIDO2 klucza zostaną zablokowane do czasu resetu."), systemImage: "info.circle")
                 .font(.system(size: 11)).foregroundStyle(Theme.muted)
             HStack {
                 Spacer()
-                Button("Anuluj") { dismiss() }.buttonStyle(GhostButtonStyle())
-                Button(action: submit) { Label("Dalej", systemImage: "arrow.right") }
+                Button(L("Anuluj")) { dismiss() }.buttonStyle(GhostButtonStyle())
+                Button(action: submit) { Label(L("Dalej"), systemImage: "arrow.right") }
                     .buttonStyle(PrimaryButtonStyle()).disabled(pin.count < 4).keyboardShortcut(.defaultAction)
             }
         }
@@ -758,10 +758,10 @@ struct SelfTestFailureView: View {
             Color.black.opacity(0.85).ignoresSafeArea()
             VStack(spacing: 16) {
                 Image(systemName: "xmark.shield.fill").font(.system(size: 54)).foregroundStyle(Theme.bad)
-                Text("Samotest kryptograficzny nie powiódł się").font(.system(size: 22, weight: .bold, design: .rounded))
+                Text(L("Samotest kryptograficzny nie powiódł się")).font(.system(size: 22, weight: .bold, design: .rounded))
                 Text(message).font(.system(size: 13)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
                     .frame(maxWidth: 460)
-                Button("Zamknij aplikację") { NSApp.terminate(nil) }.buttonStyle(PrimaryButtonStyle())
+                Button(L("Zamknij aplikację")) { NSApp.terminate(nil) }.buttonStyle(PrimaryButtonStyle())
             }
         }
     }

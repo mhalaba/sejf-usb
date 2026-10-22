@@ -44,9 +44,23 @@ swift Tools/make_icon.swift /tmp && iconutil -c icns /tmp/AppIcon.iconset -o Res
 | `Sources/Core/YubiKeyCCID.swift` | wykrywanie kluczy przez FIDO2 (każdy klucz FIDO2) + model i numer seryjny przez CCID, gdy dostępne |
 | `Sources/Core/SelfTest.swift` | samotesty kryptograficzne przy starcie (styl FIPS 140-3) |
 | `Sources/Core/Support.swift` | błędy, losowość, PBKDF2/HKDF, hasło odzyskiwania, bezpieczne usuwanie, wykrywanie iCloud |
+| `Sources/Core/Localization.swift` | funkcja `L("…")`, wybór języka, bezpieczne podstawianie wartości |
+| `Sources/Core/Translations+EN.swift` | słownik angielski (klucz = polski tekst z kodu) |
 | `Sources/App/*.swift` | interfejs SwiftUI (model aplikacji, widoki, motyw) |
 | `Tests/main.swift` | testy z programowym odpowiednikiem klucza FIDO2 |
-| `Resources/` | `Info.plist`, `Entitlements.plist`, ikona |
+| `Resources/` | `Info.plist`, `Entitlements.plist`, ikona, `pl.lproj` / `en.lproj` |
+
+## Tłumaczenia
+
+- Każdy tekst dla użytkownika przechodzi przez `L("polski tekst")`. Wartości wstawia się przez `%@` (albo `%1$@`, `%2$@` przy innej kolejności).
+- Wersja angielska jest w `Sources/Core/Translations+EN.swift`.
+- Testy sprawdzają, że:
+  - każdy tekst ma tłumaczenie;
+  - liczba miejsc na wartości się zgadza;
+  - słownik nie ma nieużywanych wpisów;
+  - w kodzie nie został żaden nieprzetłumaczony polski tekst.
+
+Nowy tekst: napisz `L("…")` w kodzie i dodaj tłumaczenie do słownika. `./build.sh test` pokaże, jeśli czegoś brakuje.
 
 ## Co sprawdzają testy (wybór)
 
@@ -58,7 +72,8 @@ swift Tools/make_icon.swift /tmp && iconutil -c icns /tmp/AppIcon.iconset -o Res
 - wykrywanie folderów iCloud;
 - odporność dekodera CBOR na spreparowane dane;
 - klucze bez numeru seryjnego (Security Key): ciche rozpoznanie, blokada ponownego dodania;
-- samotesty kryptograficzne (10 testów znanych odpowiedzi i spójności).
+- samotesty kryptograficzne (10 testów znanych odpowiedzi i spójności);
+- kompletność i poprawność angielskiego tłumaczenia.
 
 ## Uwagi
 

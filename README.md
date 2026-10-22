@@ -5,6 +5,8 @@
 ![Swift](https://img.shields.io/badge/Swift-5-orange)
 [![Licencja MIT](https://img.shields.io/badge/licencja-MIT-green)](LICENSE)
 
+🇵🇱 Polski · 🇬🇧 [English version](README.en.md)
+
 **Szyfrowany sejf na pliki dla macOS, otwierany hasłem i dotknięciem YubiKeya.** Działa w 100% offline i nie korzysta z żadnych zewnętrznych zależności ani zgód systemowych.
 
 <p align="center"><img src="Docs/screenshots/sejf.png" width="760" alt="Okno sejfu"></p>
@@ -19,6 +21,7 @@
 - ♻️ **Wymiana klucza głównego** unieważnia stare klucze, hasła i kopie nagłówka. Jest odporna na przerwanie.
 - 🧹 **Bezpieczne przenoszenie plików.** Oryginał jest usuwany dopiero po kontrolnym odszyfrowaniu i porównaniu SHA-256.
 - 🧪 **Algorytmy zatwierdzone przez NIST i samotesty przy starcie** (styl FIPS 140-3). Projekt nie ma certyfikatu FIPS — patrz [Docs/06-FIPS.md](Docs/06-FIPS.md).
+- 🌐 **Polski i angielski:** według języka systemu albo do wyboru w menu.
 - 🛡 **Ochrona środowiska:** blokada folderów iCloud, ochrona okien przed zrzutami ekranu i automatyczna blokada (bezczynność, uśpienie, odłączenie nośnika).
 
 | Ekran powitalny | Twoje sejfy | Dotknięcie klucza |
@@ -86,16 +89,4 @@ Szczegóły: [Docs/03-Bezpieczenstwo.md](Docs/03-Bezpieczenstwo.md).
 
 ## English
 
-**Sejf USB** is a native macOS file vault unlocked with **a password plus a YubiKey touch** (FIDO2 `hmac-secret`, mixed into the key derivation, not a UI gate).
-- Files are encrypted with AES-256-GCM in 1 MiB authenticated chunks; file names are encrypted too.
-- Works with YubiKey 5 and the cheaper Security Key NFC (any FIDO2 key with `hmac-secret`); FIDO2 PIN supported where required.
-- NIST-approved algorithms only (via Apple corecrypto) with FIPS 140-3-style power-up self-tests — not FIPS certified (see [Docs/06-FIPS.md](Docs/06-FIPS.md)).
-- Supports multiple vaults (on the Mac or on a USB drive) and multiple users per vault, each with their own key and password.
-- Includes a 160-bit recovery code and master-key rotation with crash-safe re-encryption.
-- Fully offline, no third-party dependencies, no special macOS permissions.
-- The UI and documentation are in Polish; the [format specification](Docs/04-Specyfikacja-formatu.md) is precise enough to implement independently.
-- Build:
-  ```bash
-  ./build.sh test && ./build.sh
-  ```
-- MIT licensed. Report vulnerabilities privately (see [SECURITY.md](SECURITY.md)).
+Full English README: **[README.en.md](README.en.md)**. English documentation: [Docs/en/](Docs/en/01-User-guide.md). The app itself is available in Polish and English.

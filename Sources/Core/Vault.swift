@@ -104,7 +104,7 @@ public final class Vault: @unchecked Sendable {
     public static func open(on volume: URL) throws -> Vault {
         let dir = folder(on: volume)
         try finishInterruptedRotation(in: dir)
-        var lastError: Error = SejfError.corrupt("brak nagłówka sejfu")
+        var lastError: Error = SejfError.corrupt(L("brak nagłówka sejfu"))
         for name in [headerName, backupHeaderName] {
             do {
                 let header = try decodeHeader(Data(contentsOf: dir.appendingPathComponent(name)))
@@ -120,7 +120,7 @@ public final class Vault: @unchecked Sendable {
         let header = try JSONDecoder().decode(VaultHeader.self, from: data)
         guard header.format == "sejf-usb", header.version == 1,
               header.vaultID.count == 16, (4096...(64 << 20)).contains(header.chunkSize)
-        else { throw SejfError.corrupt("nieznany format nagłówka") }
+        else { throw SejfError.corrupt(L("nieznany format nagłówka")) }
         return header
     }
 
@@ -129,7 +129,7 @@ public final class Vault: @unchecked Sendable {
                               name: String? = nil, owner: String? = nil,
                               chunkSize: Int = 1 << 20,
                               iterations: Int = defaultIterations) throws -> (Vault, String) {
-        guard !exists(on: volume) else { throw SejfError.invalidInput("Na tym nośniku już jest sejf.") }
+        guard !exists(on: volume) else { throw SejfError.invalidInput(L("Na tym nośniku już jest sejf.")) }
         try checkPassword(password)
         let dir = folder(on: volume)
         var header = VaultHeader(vaultID: try Rand.bytes(16), created: Date().timeIntervalSince1970,
@@ -165,7 +165,7 @@ public final class Vault: @unchecked Sendable {
     /// Użytkownicy sejfu (imiona z kluczy FIDO2).
     public var users: [String] {
         var seen: [String] = []
-        for slot in fidoSlots { let n = slot.owner ?? "Bez nazwy"; if !seen.contains(n) { seen.append(n) } }
+        for slot in fidoSlots { let n = slot.owner ?? L("Bez nazwy"); if !seen.contains(n) { seen.append(n) } }
         return seen
     }
 
@@ -179,7 +179,7 @@ public final class Vault: @unchecked Sendable {
 
     static func checkPassword(_ password: String) throws {
         guard password.count >= minPasswordLength else {
-            throw SejfError.invalidInput("Hasło musi mieć co najmniej \(minPasswordLength) znaków.")
+            throw SejfError.invalidInput(L("Hasło musi mieć co najmniej %@ znaków.", minPasswordLength))
         }
     }
 
@@ -191,7 +191,7 @@ public final class Vault: @unchecked Sendable {
     /// Jedno dotknięcie: klucz sam wskazuje, które z zarejestrowanych poświadczeń jest jego.
     public func unlock(password: String, fido: FIDOAuthenticator) throws {
         let slots = fidoSlots.filter { $0.credentialID != nil && $0.challenge != nil }
-        guard let salt = slots.first?.challenge else { throw SejfError.invalidInput("Ten sejf nie ma klucza FIDO2.") }
+        guard let salt = slots.first?.challenge else { throw SejfError.invalidInput(L("Ten sejf nie ma klucza FIDO2.")) }
         let (credential, output) = try fido.hmacSecret(rpID: Self.fidoRP, credentialIDs: slots.compactMap(\.credentialID), salt: salt)
         guard let slot = slots.first(where: { $0.credentialID == credential }) else { throw SejfError.badCredentials }
         let kek = try fidoKEK(password: password, output: output, salt: slot.salt,
@@ -203,7 +203,7 @@ public final class Vault: @unchecked Sendable {
 
     public func unlock(recoveryCode: String) throws {
         guard let bytes = RecoveryCode.decode(recoveryCode) else {
-            throw SejfError.invalidInput("Kod odzyskiwania ma nieprawidłowy format.")
+            throw SejfError.invalidInput(L("Kod odzyskiwania ma nieprawidłowy format."))
         }
         for slot in header.keyslots where slot.kind == .recovery {
             if let master = try? unwrap(slot, kek: recoveryKEK(bytes, salt: slot.salt)) {
@@ -233,11 +233,11 @@ public final class Vault: @unchecked Sendable {
         let master = try requireMaster()
         try Self.checkPassword(password)
         if let serial, fidoSlots.contains(where: { $0.serial == serial }) {
-            throw SejfError.invalidInput("Ten YubiKey jest już w sejfie — użyj „Zmień hasło”.")
+            throw SejfError.invalidInput(L("Ten YubiKey jest już w sejfie — użyj „Zmień hasło”."))
         }
         // Klucze bez numeru seryjnego (np. Security Key) rozpoznajemy po poświadczeniu — bez dotyku.
         if let existing = try connectedSlot(fido: fido) {
-            throw SejfError.invalidInput("Ten klucz jest już w sejfie (\(existing.owner ?? existing.label)).")
+            throw SejfError.invalidInput(L("Ten klucz jest już w sejfie (%@).", existing.owner ?? existing.label))
         }
         let credential = try fido.makeCredential(rpID: Self.fidoRP)
         let salt = try fidoSlots.first?.challenge ?? Rand.bytes(32)   // wspólna sól → odblokowanie jednym dotknięciem
@@ -262,18 +262,18 @@ public final class Vault: @unchecked Sendable {
         let master = try requireMaster()
         try Self.checkPassword(newPassword)
         guard newPassword != currentPassword else {
-            throw SejfError.invalidInput("Nowe hasło musi różnić się od obecnego.")
+            throw SejfError.invalidInput(L("Nowe hasło musi różnić się od obecnego."))
         }
         guard let index = header.keyslots.firstIndex(where: { $0.id == slotID && $0.kind == .fido2 }),
               let credential = header.keyslots[index].credentialID, let salt = header.keyslots[index].challenge else {
-            throw SejfError.invalidInput("Nie znaleziono klucza.")
+            throw SejfError.invalidInput(L("Nie znaleziono klucza."))
         }
         let old = header.keyslots[index]
         let (_, output) = try fido.hmacSecret(rpID: Self.fidoRP, credentialIDs: [credential], salt: salt)
         let currentKEK = try fidoKEK(password: currentPassword, output: output, salt: old.salt,
                                      iterations: old.iterations ?? Self.defaultIterations)
         guard let opened = try? unwrap(old, kek: currentKEK), opened.rawData == master.rawData else {
-            throw SejfError.invalidInput("Obecne hasło jest nieprawidłowe.")
+            throw SejfError.invalidInput(L("Obecne hasło jest nieprawidłowe."))
         }
         header.keyslots[index] = try makeFIDOSlot(master: master, password: newPassword, fido: fido, credentialID: credential,
                                                   hmacSalt: salt, serial: old.serial, label: old.label, owner: old.owner,
@@ -309,7 +309,7 @@ public final class Vault: @unchecked Sendable {
         let oldMaster = try requireMaster()
         try Self.checkPassword(password)
         guard let keep = fidoSlots.first(where: { $0.id == keepSlotID }), let credential = keep.credentialID else {
-            throw SejfError.invalidInput("Nie znaleziono klucza.")
+            throw SejfError.invalidInput(L("Nie znaleziono klucza."))
         }
         let fm = FileManager.default
         let newMaster = SymmetricKey(size: .bits256)
@@ -396,7 +396,7 @@ public final class Vault: @unchecked Sendable {
                               hmacSalt: Data, serial: Int?, label: String, owner: String? = nil, iterations: Int,
                               output known: Data? = nil) throws -> Keyslot {
         let output = try known ?? fido.hmacSecret(rpID: Self.fidoRP, credentialIDs: [credentialID], salt: hmacSalt).output
-        guard output.count == 32 else { throw SejfError.yubikey("Nieoczekiwana długość odpowiedzi.") }
+        guard output.count == 32 else { throw SejfError.yubikey(L("Nieoczekiwana długość odpowiedzi.")) }
         var slot = Keyslot(id: UUID().uuidString, kind: .fido2, label: label,
                            created: Date().timeIntervalSince1970, serial: serial,
                            challenge: hmacSalt, salt: try Rand.bytes(32), iterations: iterations, wrappedKey: Data())
@@ -492,7 +492,7 @@ public final class Vault: @unchecked Sendable {
             finalURL = dir.appendingPathComponent(blobName)
             tmpURL = dir.appendingPathComponent(".tmp-" + blobName)
             guard FileManager.default.createFile(atPath: tmpURL.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
-                throw SejfError.io("Nie można zapisać na nośniku (brak miejsca lub tylko do odczytu?).")
+                throw SejfError.io(L("Nie można zapisać na nośniku (brak miejsca lub tylko do odczytu?)."))
             }
             out = try FileHandle(forWritingTo: tmpURL)
             try out.write(contentsOf: blobHeader)
@@ -542,7 +542,7 @@ public final class Vault: @unchecked Sendable {
         let fm = FileManager.default
         let attrs = try fm.attributesOfItem(atPath: source.path)
         guard attrs[.type] as? FileAttributeType == .typeRegular else {
-            throw SejfError.io("„\(source.lastPathComponent)” nie jest zwykłym plikiem.")
+            throw SejfError.io(L("„%@” nie jest zwykłym plikiem.", source.lastPathComponent))
         }
         let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
         let modified = (attrs[.modificationDate] as? Date) ?? Date()
@@ -596,23 +596,23 @@ public final class Vault: @unchecked Sendable {
         else { throw SejfError.corrupt(url.lastPathComponent) }
         let fileID = blobHeader.subdata(in: blobHeader.startIndex + 5 ..< blobHeader.startIndex + 21)
         let chunkSize = Int(blobHeader.readBE32(at: 21))
-        guard chunkSize == header.chunkSize else { throw SejfError.corrupt("nieprawidłowy rozmiar fragmentu") }
+        guard chunkSize == header.chunkSize else { throw SejfError.corrupt(L("nieprawidłowy rozmiar fragmentu")) }
         guard fileID.hex + "." + Self.blobExtension == url.lastPathComponent else {
-            throw SejfError.corrupt("nazwa pliku nie zgadza się z zawartością")
+            throw SejfError.corrupt(L("nazwa pliku nie zgadza się z zawartością"))
         }
         let key = Self.fileKey(master, fileID: fileID, vaultID: header.vaultID)
         var offset = UInt64(Self.blobHeaderSize)
 
         func nextChunk(_ index: UInt64) throws -> (Data, Bool) {
             guard let lenData = try handle.read(upToCount: 4), lenData.count == 4 else {
-                throw SejfError.corrupt("plik obcięty")
+                throw SejfError.corrupt(L("plik obcięty"))
             }
             let length = Int(lenData.readBE32(at: 0))
             guard length >= 16, length <= (index == 0 ? Self.maxMetaSize : chunkSize + 16) else {
-                throw SejfError.corrupt("długość fragmentu")
+                throw SejfError.corrupt(L("długość fragmentu"))
             }
             guard let sealed = try handle.read(upToCount: length), sealed.count == length else {
-                throw SejfError.corrupt("plik obcięty")
+                throw SejfError.corrupt(L("plik obcięty"))
             }
             offset += UInt64(4 + length)
             let last = offset == total
@@ -622,12 +622,12 @@ public final class Vault: @unchecked Sendable {
                                              authenticating: Self.chunkAAD(blobHeader, index: index, last: last))
                 return (plain, last)
             } catch {
-                throw SejfError.corrupt("dane zostały zmodyfikowane lub uszkodzone (\(url.lastPathComponent))")
+                throw SejfError.corrupt(L("dane zostały zmodyfikowane lub uszkodzone (%@)", url.lastPathComponent))
             }
         }
 
         let (metaData, metaLast) = try nextChunk(0)
-        guard !metaLast else { throw SejfError.corrupt("brak treści") }
+        guard !metaLast else { throw SejfError.corrupt(L("brak treści")) }
         let meta = try JSONDecoder().decode(FileMeta.self, from: metaData)
         if metaOnly { return meta }
         try onMeta?(meta)
@@ -682,7 +682,7 @@ public final class Vault: @unchecked Sendable {
 
         let tmp = dest.deletingLastPathComponent().appendingPathComponent(".sejf-tmp-" + UUID().uuidString)
         guard fm.createFile(atPath: tmp.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
-            throw SejfError.io("Nie można zapisać w \(directory.path).")
+            throw SejfError.io(L("Nie można zapisać w %@.", directory.path))
         }
         var success = false
         defer { if !success { try? Shredder.shred(tmp) } }

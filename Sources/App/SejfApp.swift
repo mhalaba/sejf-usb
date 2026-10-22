@@ -17,13 +17,19 @@ struct SejfApp: App {
         .defaultSize(width: 1120, height: 720)
         .commands {
             CommandGroup(replacing: .newItem) {}
-            CommandMenu("Sejf") {
-                Button("Zablokuj") { model.lock() }
+            CommandMenu(L("Sejf")) {
+                Button(L("Zablokuj")) { model.lock() }
                     .keyboardShortcut("l", modifiers: [.command])
                     .disabled(model.screen != .vault)
-                Button("Zmień hasło…") { model.beginChangePassword() }
+                Button(L("Zmień hasło…")) { model.beginChangePassword() }
                     .keyboardShortcut("p", modifiers: [.command, .shift])
                     .disabled(model.screen != .vault)
+                Divider()
+                Picker("Język / Language", selection: Binding(get: { model.language }, set: { model.setLanguage($0) })) {
+                    Text("Systemowy / System").tag("system")
+                    Text("Polski").tag("pl")
+                    Text("English").tag("en")
+                }
             }
         }
     }

@@ -25,16 +25,16 @@ public struct CTAPError: LocalizedError {
     public var isPINInvalid: Bool { code == 0x31 }
     public var errorDescription: String? {
         switch code {
-        case 0x2E: return "YubiKey: ten klucz nie jest zarejestrowany w tym sejfie."
-        case 0x27: return "YubiKey: operacja odrzucona."
-        case 0x2F, 0x3A: return "YubiKey: nie dotknięto klucza na czas — spróbuj ponownie."
-        case 0x36, 0x35: return "Ten klucz wymaga kodu PIN FIDO2."
-        case 0x31: return "Nieprawidłowy kod PIN FIDO2." + (retries.map { " Pozostało prób: \($0)." } ?? "")
-        case 0x32: return "Kod PIN FIDO2 jest zablokowany (zbyt wiele błędnych prób). Klucz trzeba zresetować w Yubico Authenticator."
-        case 0x34: return "Zbyt wiele błędnych prób PIN — wyjmij klucz, włóż go ponownie i spróbuj jeszcze raz."
-        case 0x37: return "Kod PIN FIDO2 jest za krótki (minimum 4 znaki)."
-        case 0x2D: return "YubiKey: anulowano."
-        default: return "YubiKey: błąd FIDO2 (kod 0x\(String(code, radix: 16)))."
+        case 0x2E: return L("YubiKey: ten klucz nie jest zarejestrowany w tym sejfie.")
+        case 0x27: return L("YubiKey: operacja odrzucona.")
+        case 0x2F, 0x3A: return L("YubiKey: nie dotknięto klucza na czas — spróbuj ponownie.")
+        case 0x36, 0x35: return L("Ten klucz wymaga kodu PIN FIDO2.")
+        case 0x31: return L("Nieprawidłowy kod PIN FIDO2.") + (retries.map { L(" Pozostało prób: %@.", $0) } ?? "")
+        case 0x32: return L("Kod PIN FIDO2 jest zablokowany (zbyt wiele błędnych prób). Klucz trzeba zresetować w Yubico Authenticator.")
+        case 0x34: return L("Zbyt wiele błędnych prób PIN — wyjmij klucz, włóż go ponownie i spróbuj jeszcze raz.")
+        case 0x37: return L("Kod PIN FIDO2 jest za krótki (minimum 4 znaki).")
+        case 0x2D: return L("YubiKey: anulowano.")
+        default: return L("YubiKey: błąd FIDO2 (kod 0x%@).", String(code, radix: 16))
         }
     }
 }
@@ -73,7 +73,7 @@ final class CTAPHIDDevice {
     }
 
     static func product(_ device: IOHIDDevice) -> String {
-        (IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String) ?? "Klucz FIDO2"
+        (IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String) ?? L("Klucz FIDO2")
     }
 
     static func vendorID(_ device: IOHIDDevice) -> Int {
@@ -83,14 +83,14 @@ final class CTAPHIDDevice {
     /// Otwiera jedyny podłączony klucz FIDO; urządzenie jest obsługiwane na pętli bieżącego wątku.
     static func open() throws -> CTAPHIDDevice {
         let devices = matchingDevices()
-        guard let raw = devices.first else { throw SejfError.yubikey("Włóż YubiKey.") }
-        guard devices.count == 1 else { throw SejfError.yubikey("Podłączonych jest kilka kluczy — zostaw tylko jeden.") }
+        guard let raw = devices.first else { throw SejfError.yubikey(L("Włóż YubiKey.")) }
+        guard devices.count == 1 else { throw SejfError.yubikey(L("Podłączonych jest kilka kluczy — zostaw tylko jeden.")) }
         return try open(raw)
     }
 
     static func open(_ raw: IOHIDDevice) throws -> CTAPHIDDevice {
         guard IOHIDDeviceOpen(raw, IOOptionBits(kIOHIDOptionsTypeNone)) == kIOReturnSuccess else {
-            throw SejfError.yubikey("Nie można połączyć się z kluczem — wyjmij go i włóż ponownie.")
+            throw SejfError.yubikey(L("Nie można połączyć się z kluczem — wyjmij go i włóż ponownie."))
         }
         let dev = CTAPHIDDevice(device: raw)
         let context = Unmanaged.passUnretained(dev).toOpaque()
@@ -108,7 +108,7 @@ final class CTAPHIDDevice {
         let nonce = [UInt8](try Rand.bytes(8))
         let response = try transact(cmd: 0x06, payload: Data(nonce), timeout: 3, onKeepalive: nil)
         guard response.count >= 12, [UInt8](response.prefix(8)) == nonce else {
-            throw SejfError.yubikey("Nieprawidłowa odpowiedź klucza FIDO.")
+            throw SejfError.yubikey(L("Nieprawidłowa odpowiedź klucza FIDO."))
         }
         cid = response[response.startIndex + 8 ..< response.startIndex + 12].reduce(0) { ($0 << 8) | UInt32($1) }
     }
@@ -117,12 +117,12 @@ final class CTAPHIDDevice {
         var report = packet
         report += [UInt8](repeating: 0, count: Self.reportSize - report.count)
         let r = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0, report, report.count)
-        guard r == kIOReturnSuccess else { throw SejfError.yubikey("Nie można wysłać danych do klucza.") }
+        guard r == kIOReturnSuccess else { throw SejfError.yubikey(L("Nie można wysłać danych do klucza.")) }
     }
 
     private func nextPacket(until deadline: Date) throws -> [UInt8] {
         while packets.isEmpty {
-            guard Date() < deadline else { throw SejfError.yubikey("Klucz nie odpowiada — spróbuj ponownie.") }
+            guard Date() < deadline else { throw SejfError.yubikey(L("Klucz nie odpowiada — spróbuj ponownie.")) }
             CFRunLoopRunInMode(.defaultMode, 0.05, true)
         }
         return packets.removeFirst()
@@ -156,7 +156,7 @@ final class CTAPHIDDevice {
             if rcmd == 0x3F { throw CTAPError(code: p[7]) }   // ERROR
             guard rcmd == cmd & 0x7F else { continue }
             let total = Int(p[5]) << 8 | Int(p[6])
-            guard total <= 7609 else { throw SejfError.yubikey("Nieprawidłowa odpowiedź klucza.") }   // limit CTAPHID
+            guard total <= 7609 else { throw SejfError.yubikey(L("Nieprawidłowa odpowiedź klucza.")) }   // limit CTAPHID
             var body = Array(p[7..<min(7 + total, p.count)])
             var expectSeq: UInt8 = 0
             while body.count < total {
@@ -175,7 +175,7 @@ final class CTAPHIDDevice {
         var payload = Data([command])
         if let params { payload.append(params.encoded()) }
         let response = try transact(cmd: 0x10, payload: payload, timeout: timeout, onKeepalive: onKeepalive)
-        guard let status = response.first else { throw SejfError.yubikey("Pusta odpowiedź klucza.") }
+        guard let status = response.first else { throw SejfError.yubikey(L("Pusta odpowiedź klucza.")) }
         guard status == 0 else { throw CTAPError(code: status) }
         guard response.count > 1 else { return nil }
         return try CBOR.decode(response, at: 1).0
@@ -206,7 +206,7 @@ public struct FIDOInfo: Sendable, Equatable {
 
 extension CTAPHIDDevice {
     func getInfo() throws -> FIDOInfo {
-        guard let info = try cbor(0x04, nil, timeout: 5) else { throw SejfError.yubikey("Klucz nie podał swoich możliwości.") }
+        guard let info = try cbor(0x04, nil, timeout: 5) else { throw SejfError.yubikey(L("Klucz nie podał swoich możliwości.")) }
         return FIDOInfo(info)
     }
 }
@@ -241,10 +241,10 @@ public struct YubiKeyFIDO: FIDOAuthenticator, Sendable {
         try withDevice { dev in
             let info = try dev.getInfo()
             guard info.supportsHMACSecret else {
-                throw SejfError.yubikey("Ten klucz nie obsługuje FIDO2 hmac-secret — nie może chronić sejfu.")
+                throw SejfError.yubikey(L("Ten klucz nie obsługuje FIDO2 hmac-secret — nie może chronić sejfu."))
             }
             guard !info.alwaysUV else {
-                throw SejfError.yubikey("Klucz ma włączone „Always UV” — wyłącz tę opcję w Yubico Authenticator.")
+                throw SejfError.yubikey(L("Klucz ma włączone „Always UV” — wyłącz tę opcję w Yubico Authenticator."))
             }
             let clientDataHash = try Rand.bytes(32)
             var params: [CBOR: CBOR] = [
@@ -264,13 +264,13 @@ public struct YubiKeyFIDO: FIDOAuthenticator, Sendable {
             }
             guard let response = try dev.cbor(0x01, .map(params), onKeepalive: keepalive),
                   let authData = response[2]?.data, authData.count > 55 else {
-                throw SejfError.yubikey("Nieprawidłowa odpowiedź przy tworzeniu poświadczenia.")
+                throw SejfError.yubikey(L("Nieprawidłowa odpowiedź przy tworzeniu poświadczenia."))
             }
             // authData: rpIdHash(32) flags(1) signCount(4) aaguid(16) credIdLen(2) credId(L) ...
             let b = [UInt8](authData)
-            guard b[32] & 0x40 != 0 else { throw SejfError.yubikey("Brak danych poświadczenia.") }
+            guard b[32] & 0x40 != 0 else { throw SejfError.yubikey(L("Brak danych poświadczenia.")) }
             let length = Int(b[53]) << 8 | Int(b[54])
-            guard length > 0, 55 + length <= b.count else { throw SejfError.yubikey("Nieprawidłowe poświadczenie.") }
+            guard length > 0, 55 + length <= b.count else { throw SejfError.yubikey(L("Nieprawidłowe poświadczenie.")) }
             return Data(b[55..<55 + length])
         }
     }
@@ -297,7 +297,7 @@ public struct YubiKeyFIDO: FIDOAuthenticator, Sendable {
     private static func agree(_ dev: CTAPHIDDevice) throws -> (shared: Data, cose: CBOR) {
         guard let ka = try dev.cbor(0x06, .map([1: 1, 2: 2]), timeout: 5),
               let cose = ka[1], let x = cose[-2]?.data, let y = cose[-3]?.data, x.count == 32, y.count == 32 else {
-            throw SejfError.yubikey("Nie udało się uzgodnić klucza z YubiKey.")
+            throw SejfError.yubikey(L("Nie udało się uzgodnić klucza z YubiKey."))
         }
         let peer = try P256.KeyAgreement.PublicKey(x963Representation: Data([0x04]) + x + y)
         let mine = P256.KeyAgreement.PrivateKey()
@@ -317,7 +317,7 @@ public struct YubiKeyFIDO: FIDOAuthenticator, Sendable {
             guard let response = try dev.cbor(0x06, .map([1: 1, 2: 5, 3: cose, 6: .bytes(try aesCBC(encrypt: true, key: shared, data: Data(pinHash)))]),
                                               timeout: 10),
                   let encrypted = response[2]?.data, encrypted.count % 16 == 0, !encrypted.isEmpty else {
-                throw SejfError.yubikey("Klucz nie wydał tokenu PIN.")
+                throw SejfError.yubikey(L("Klucz nie wydał tokenu PIN."))
             }
             return try aesCBC(encrypt: false, key: shared, data: encrypted)
         } catch let e as CTAPError where e.code == 0x31 {
@@ -328,7 +328,7 @@ public struct YubiKeyFIDO: FIDOAuthenticator, Sendable {
     }
 
     public func hmacSecret(rpID: String, credentialIDs: [Data], salt: Data) throws -> (credentialID: Data, output: Data) {
-        guard salt.count == 32, !credentialIDs.isEmpty else { throw SejfError.invalidInput("Nieprawidłowe parametry hmac-secret.") }
+        guard salt.count == 32, !credentialIDs.isEmpty else { throw SejfError.invalidInput(L("Nieprawidłowe parametry hmac-secret.")) }
         return try withDevice { dev in
             // 1. Uzgodnienie klucza (ECDH P-256) z kluczem sprzętowym.
             let (shared, myCOSE) = try Self.agree(dev)
@@ -347,14 +347,14 @@ public struct YubiKeyFIDO: FIDOAuthenticator, Sendable {
             // 3. getAssertion — tu klucz czeka na dotknięcie.
             guard let response = try dev.cbor(0x02, params, onKeepalive: keepalive),
                   let authData = response[2]?.data, authData.count > 37 else {
-                throw SejfError.yubikey("Nieprawidłowa odpowiedź klucza.")
+                throw SejfError.yubikey(L("Nieprawidłowa odpowiedź klucza."))
             }
             let credential = response[1]?["id"]?.data ?? (credentialIDs.count == 1 ? credentialIDs[0] : nil)
-            guard let credential else { throw SejfError.yubikey("Klucz nie wskazał poświadczenia.") }
-            guard authData[authData.startIndex + 32] & 0x80 != 0 else { throw SejfError.yubikey("Klucz nie zwrócił hmac-secret.") }
+            guard let credential else { throw SejfError.yubikey(L("Klucz nie wskazał poświadczenia.")) }
+            guard authData[authData.startIndex + 32] & 0x80 != 0 else { throw SejfError.yubikey(L("Klucz nie zwrócił hmac-secret.")) }
             let (ext, _) = try CBOR.decode(authData, at: 37)
             guard let enc = ext["hmac-secret"]?.data, enc.count == 32 else {
-                throw SejfError.yubikey("Klucz nie zwrócił hmac-secret.")
+                throw SejfError.yubikey(L("Klucz nie zwrócił hmac-secret."))
             }
             return (credential, try Self.aesCBC(encrypt: false, key: shared, data: enc))
         }

@@ -11,7 +11,7 @@ public enum SelfTest {
     public struct Failure: LocalizedError {
         public let test: String
         public var errorDescription: String? {
-            "Samotest kryptograficzny „\(test)” nie powiódł się. Aplikacja nie będzie przetwarzać danych — zgłoś problem."
+            L("Samotest kryptograficzny „%@” nie powiódł się. Aplikacja nie będzie przetwarzać danych — zgłoś problem.", test)
         }
     }
 
@@ -54,11 +54,11 @@ public enum SelfTest {
         let gcmKey = SymmetricKey(data: Data(count: 32))
         let gcmNonce = try AES.GCM.Nonce(data: Data(count: 12))
         let box = try AES.GCM.seal(Data(count: 16), using: gcmKey, nonce: gcmNonce)
-        try expect("AES-256-GCM (szyfrowanie)", box.ciphertext == hex("cea7403d4d606b6e074ec5d3baf39d18")
+        try expect(L("AES-256-GCM (szyfrowanie)"), box.ciphertext == hex("cea7403d4d606b6e074ec5d3baf39d18")
                     && box.tag == hex("d0d1c8a799996bf0265b98b5d48ab919"))
-        try expect("AES-256-GCM (odszyfrowanie)", try AES.GCM.open(box, using: gcmKey) == Data(count: 16))
+        try expect(L("AES-256-GCM (odszyfrowanie)"), try AES.GCM.open(box, using: gcmKey) == Data(count: 16))
         var tampered = box.ciphertext; tampered[tampered.startIndex] ^= 1
-        try expect("AES-256-GCM (wykrycie zmiany)",
+        try expect(L("AES-256-GCM (wykrycie zmiany)"),
                    (try? AES.GCM.open(AES.GCM.SealedBox(nonce: gcmNonce, ciphertext: tampered, tag: box.tag), using: gcmKey)) == nil)
 
         // ECDH P-256 (SP 800-56A) — test spójności par kluczy
@@ -69,7 +69,7 @@ public enum SelfTest {
 
         // Generator liczb losowych (SP 800-90A w corecrypto) — kolejne bloki różne i niezerowe
         let r1 = try Rand.bytes(32), r2 = try Rand.bytes(32)
-        try expect("Generator losowy", r1 != r2 && r1 != Data(count: 32) && r2 != Data(count: 32))
+        try expect(L("Generator losowy"), r1 != r2 && r1 != Data(count: 32) && r2 != Data(count: 32))
 
         return passed
     }

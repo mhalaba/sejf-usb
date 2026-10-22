@@ -38,7 +38,7 @@ public enum KeyScanner {
                 // Model i numer seryjny z CCID tylko wtedy, gdy przypisanie jest jednoznaczne.
                 let enriched = (yubicoFIDO.count == 1 && ccid.count == 1 && CTAPHIDDevice.vendorID(raw) == 0x1050) ? ccid.first : nil
                 let product = CTAPHIDDevice.product(raw)
-                let name = enriched?.name ?? (product == "YubiKey FIDO" ? "YubiKey / Security Key (FIDO2)" : product)
+                let name = enriched?.name ?? (product == "YubiKey FIDO" ? L("YubiKey / Security Key (FIDO2)") : product)
                 return YubiKeyDevice(name: name, serial: enriched?.serial,
                                      supportsHMACSecret: info?.supportsHMACSecret ?? false,
                                      requiresPINForRegistration: info?.requiresPINForRegistration ?? false)
@@ -70,12 +70,12 @@ public enum YubiKeyCCID {
     private static func device(reader: String) throws -> YubiKeyDevice {
         guard let slot = TKSmartCardSlotManager.default?.slotNamed(reader), slot.state == .validCard,
               let card = slot.makeSmartCard() else {
-            throw SejfError.yubikey("Czytnik klucza jest niedostępny.")
+            throw SejfError.yubikey(L("Czytnik klucza jest niedostępny."))
         }
-        guard try card.beginSessionSync() else { throw SejfError.yubikey("Klucz jest zajęty.") }
+        guard try card.beginSessionSync() else { throw SejfError.yubikey(L("Klucz jest zajęty.")) }
         defer { card.endSession() }
         let (sw, status) = try card.send(ins: 0xA4, p1: 0x04, p2: 0x00, data: otpAID, le: 0)
-        guard sw == 0x9000, status.count >= 3 else { throw SejfError.yubikey("Brak aplikacji OTP.") }
+        guard sw == 0x9000, status.count >= 3 else { throw SejfError.yubikey(L("Brak aplikacji OTP.")) }
         let v = [UInt8](status.prefix(3))
         var serial: Int?
         if let (ssw, s) = try? card.send(ins: 0x01, p1: 0x10, p2: 0, data: nil, le: 0), ssw == 0x9000, s.count == 4 {

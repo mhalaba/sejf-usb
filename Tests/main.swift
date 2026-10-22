@@ -19,6 +19,7 @@ final class SoftFIDO: FIDOAuthenticator {
     }
 }
 
+Lang.override = "pl"   // testy sprawdzają polskie komunikaty niezależnie od języka systemu
 var failures = 0
 func check(_ cond: Bool, _ name: String) {
     print((cond ? "  ok   " : "  FAIL ") + name)
@@ -358,6 +359,54 @@ check(throwsError { _ = try CBOR.decode(Data([0x9A, 0x7F, 0xFF, 0xFF, 0xFF])) },
 check(throwsError { _ = try CBOR.decode(Data(repeating: 0x81, count: 100)) }, "CBOR: zbyt głębokie zagnieżdżenie odrzucone")
 let sample: CBOR = .map([1: .bytes(Data([1, 2])), "id": "x", -25: true, 3: .array([.int(-7), .int(500000)])])
 check((try CBOR.decode(sample.encoded()).0) == sample, "CBOR: kodowanie i dekodowanie zgodne")
+
+print("Wersja angielska (tłumaczenia)")
+do {
+    var keys: [String] = []
+    var leftovers: [String] = []
+    let keyPattern = try NSRegularExpression(pattern: #"\bL\("((?:[^"\\]|\\.)*)""#)
+    let polishLiteral = try NSRegularExpression(pattern: #""((?:[^"\\]|\\.)*[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ](?:[^"\\]|\\.)*)""#)
+    let sources = ((fm.enumerator(atPath: "Sources")?.allObjects as? [String]) ?? []).filter { $0.hasSuffix(".swift") }
+    check(!sources.isEmpty, "znaleziono pliki źródłowe (\(sources.count))")
+    for file in sources where !file.hasSuffix("Translations+EN.swift") {
+        let text = try String(contentsOfFile: "Sources/" + file, encoding: .utf8)
+        for line in text.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("//") { continue }
+            let ns = line as NSString
+            for m in keyPattern.matches(in: line, range: NSRange(location: 0, length: ns.length)) {
+                let raw = ns.substring(with: m.range(at: 1))
+                let key = raw.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\\"", with: "\"")
+                if !keys.contains(key) { keys.append(key) }
+            }
+            // Polskie teksty poza L(…) — dozwolone tylko nazwy folderów i dane techniczne.
+            for m in polishLiteral.matches(in: line, range: NSRange(location: 0, length: ns.length)) {
+                let prefix = ns.substring(to: m.range.location)
+                if prefix.hasSuffix("L(") { continue }
+                let lit = ns.substring(with: m.range(at: 1))
+                if ["nośnik", "Hasło odzyskiwania", "Bez nazwy"].contains(lit) && !file.hasPrefix("App/") { continue }
+                if lit == "nośnik" || lit == "Język / Language" { continue }   // celowo dwujęzyczne / techniczne
+                leftovers.append("\(file): \(lit)")
+            }
+        }
+    }
+    let missing = keys.filter { Translations.en[$0] == nil }
+    check(missing.isEmpty, "każdy tekst ma tłumaczenie (\(keys.count) tekstów)" + (missing.isEmpty ? "" : " — brak: \(missing.prefix(5))"))
+    let mismatched = keys.filter { k in Translations.en[k].map { Translations.placeholderCount($0) != Translations.placeholderCount(k) } ?? false }
+    check(mismatched.isEmpty, "liczba miejsc na wartości zgodna w tłumaczeniach" + (mismatched.isEmpty ? "" : " — \(mismatched.prefix(3))"))
+    check(Set(Translations.en.keys).isSubset(of: Set(keys)), "słownik nie zawiera nieużywanych wpisów")
+    check(leftovers.isEmpty, "brak nieprzetłumaczonych polskich tekstów w kodzie" + (leftovers.isEmpty ? "" : " — \(leftovers.prefix(5))"))
+
+    Lang.override = "en"
+    check(L("Witaj, %@!", "Anna") == "Welcome, Anna!", "angielski: podstawianie wartości")
+    check(SejfError.badCredentials.localizedDescription == "Wrong password or YubiKey.", "angielski: komunikaty błędów rdzenia")
+    check(L("Szyfrowanie %@/%@: %@", 1, 3, "a.pdf") == "Encrypting 1/3: a.pdf", "angielski: kilka wartości w kolejności")
+    check(L("tekst spoza słownika") == "tekst spoza słownika", "brak tłumaczenia → tekst polski (bez awarii)")
+    Lang.override = "pl"
+    check(L("Witaj, %@!", "Anna") == "Witaj, Anna!", "polski: podstawianie wartości")
+    check(Translations.format("%2$@ — %1$@", ["a", "b"]) == "b — a", "wartości w zmienionej kolejności (%1$@, %2$@)")
+    check(Translations.format("100%% %@ %@", ["x"]) == "100% x ", "brakujące wartości i %% bez awarii")
+}
 
 print("Czas PBKDF2 (3 000 000 iteracji)")
 let t0 = Date()
