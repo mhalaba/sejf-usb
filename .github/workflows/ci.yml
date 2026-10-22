@@ -1,0 +1,24 @@
+name: Testy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Testy rdzenia (kryptografia, format, wymiana klucza, parsery)
+        run: STRICT=0 ./build.sh test
+
+      - name: Budowa aplikacji (arm64 + x86_64)
+        run: STRICT=0 DEST="$RUNNER_TEMP/app" ./build.sh
+
+      - name: Weryfikacja podpisu
+        run: codesign --verify --strict "$RUNNER_TEMP/app/Sejf USB.app"

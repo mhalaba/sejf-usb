@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+._*
+
+# Wyniki budowania
+/dist/
+/build/
+*.app/
+*.zip
+*.zip.sha256
+*.dSYM/
+
+# Xcode / SwiftPM (gdyby ktoś otworzył projekt w Xcode)
+.swiftpm/
+xcuserdata/
+DerivedData/
+
+# Nigdy nie dodawaj sejfów do repozytorium
+Sejf.vault/
